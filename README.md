@@ -1,5 +1,7 @@
 # dsh-restart-button
 
+[English](README.en.md) · 中文
+
 ![归档按钮与重启按钮（含两击确认态）界面示意](assets/dsh-archive-button-restart-button.png)
 
 *界面示意：按官方主题变量渲染的版式，非实机截图。*
