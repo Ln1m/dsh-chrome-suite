@@ -2,7 +2,7 @@
 
 [中文](README.md) · English
 
-![Archive and restart buttons, including the two-click confirm state](assets/dsh-archive-button-restart-button.png)
+![Archive and restart buttons, including the two-click confirm state](assets/dsh-archive-button-restart-button-en.png)
 
 *Mockup: layout rendered from the official theme tokens, not a screenshot of a running instance.*
 
