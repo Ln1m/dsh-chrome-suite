@@ -20,8 +20,7 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "dsh-vk-contract"
+        "@deepseek-ai/dsh-client-ui-conversation"
       ],
       "platform": "web"
     }
