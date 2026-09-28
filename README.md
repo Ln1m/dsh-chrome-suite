@@ -1,5 +1,7 @@
 # dsh-restart-button
 
+> 本分支是 **vk 版**：只注册 vk 槽，需先装 [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite)（契约 + 骨架）。零 vk 版见 [official 分支](https://github.com/Ln1m/dsh-restart-button/tree/official)。
+
 [English](README.en.md) · 中文
 
 ![会话头右侧的重启按钮界面实拍](assets/dsh-restart-button.png)

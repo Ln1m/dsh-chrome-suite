@@ -1,8 +1,8 @@
-// dsh-vk-terminal — 会话头右上角的 DSH 重启按钮（两击确认 + 探针复位）。
-// 合并了旧的两个重启入口：语义与恢复判据照搬 dsh-restart-button 的客户端半端，
-// host 路由仍是 /dsh-restart/restart（重启**本实例**，不是硬编码 3080）。
+// dsh-restart-button — 会话头右上角的 DSH 重启按钮（两击确认 + 探针复位）。
+// vk 版：按钮落在 vk 布局的会话头槽（vk.session.header.right）。
+// host 路由是 /dsh-restart/restart（重启**本实例**，不是硬编码 3080）。
 window.__ModuleLoader__.load({
-	id: 'dsh-vk-terminal',
+	id: 'dsh-restart-button',
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
