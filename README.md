@@ -2,9 +2,9 @@
 
 [English](README.en.md) · 中文
 
-![归档按钮与重启按钮（含两击确认态）界面示意](assets/dsh-archive-button-restart-button.png)
+![归档按钮与重启按钮（含两击确认态）界面实拍](assets/dsh-restart-button.png)
 
-*界面示意：按官方主题变量渲染的版式，非实机截图。*
+*界面实拍：截自本机运行中的 DSH 实例，示例内容已脱敏。*
 
 会话头上一枚两击确认的「重启 DSH」按钮。它先抓本进程的监听端口、node 可执行文件、入口脚本、工作目录与 argv，写成请求文件后交给独立进程按这套身份重启同一个实例——两个实例共用一份 Harness home 时，不会在 A 里点重启却杀掉 B。
 
