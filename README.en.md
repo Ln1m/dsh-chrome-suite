@@ -22,9 +22,10 @@ Restart the web instance afterwards.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DSH_ROOT` | `~/DeepSeek_harness` | Used to locate `scripts/dsh-restart-instance.vbs` and to write logs |
+| `DSH_ROOT` | `~/DeepSeek_harness` | Where the log and the restart request file go |
 
 ## Requirements
 
 - Windows: the restart chain is wscript → powershell, entirely outside the web process
-- `<DSH_ROOT>\scripts\dsh-restart-instance.vbs` must be provided by you
+- The restart scripts ship with this repo (`scripts/dsh-restart-instance.vbs` + `scripts/dsh-restart-instance.ps1`) and work as installed
+- The bundled scripts win; `<DSH_ROOT>\scripts\dsh-restart-instance.vbs` is the fallback

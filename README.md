@@ -22,9 +22,10 @@ dsh plugin --profile web add file:<本仓库>
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `DSH_ROOT` | `~/DeepSeek_harness` | 用来找 `scripts/dsh-restart-instance.vbs` 并写日志 |
+| `DSH_ROOT` | `~/DeepSeek_harness` | 日志与重启请求文件的落点 |
 
 ## 前提
 
 - Windows：重启链是 wscript → powershell，完全脱离 web 进程
-- `<DSH_ROOT>\scripts\dsh-restart-instance.vbs` 需自备
+- 重启脚本随本仓库提供（`scripts/dsh-restart-instance.vbs` + `scripts/dsh-restart-instance.ps1`），装完即用
+- 包内脚本优先；`<DSH_ROOT>\scripts\dsh-restart-instance.vbs` 存在时作为回退（想用自己那份就放在那里）
