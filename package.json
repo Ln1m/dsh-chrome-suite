@@ -1,7 +1,7 @@
 {
     "name": "dsh-restart-button",
     "version": "0.1.0",
-    "description": "DSH restart button: adds a two-click-confirm 'Restart DSH' button beside the stock Session-log button in the session header. Clicking it spawns an independent process that kills the node on 3080 and relaunches dsh web. Triggered only by the user, never by the model.",
+    "description": "DSH restart button: adds a two-click-confirm 'Restart DSH' button beside the stock Session-log button in the session header. The handler captures THIS process's own listen port, node executable, entry script, cwd and argv, then hands them to a detached launcher so exactly that instance restarts (two instances sharing one Harness home no longer kill each other). Triggered only by the user, never by the model.",
     "type": "module",
     "main": "lib/index.js",
     "exports": {
@@ -19,6 +19,7 @@
         },
         "client": {
             "inject": [
+                "@deepseek-ai/dsh-client-runtime",
                 "@deepseek-ai/dsh-client-ui-conversation"
             ],
             "platform": "web"
