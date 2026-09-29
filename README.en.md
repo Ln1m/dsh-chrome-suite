@@ -28,10 +28,12 @@ Or install the whole family on Windows PowerShell:
 Install straight from the release, no clone needed:
 
 ```sh
-dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-restart-button-0.1.0.tgz"
+dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-head-restart-0.1.0.tgz"
 dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-archive-button-0.1.0.tgz"
-dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-wallet-1.3.1.tgz"
+dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-wallet-1.3.2.tgz"
 ```
+
+If the install fails with `UNABLE_TO_VERIFY_LEAF_SIGNATURE` (a TLS-intercepting proxy; Node does not read the system CA store by default), run `$env:NODE_OPTIONS='--use-system-ca'` first.
 
 Restart the web instance afterwards. Each package directory carries its own README.
 
