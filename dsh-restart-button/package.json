@@ -44,10 +44,11 @@
   "author": "Ln1m (https://github.com/Ln1m)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Ln1m/dsh-head-restart.git"
+    "url": "git+https://github.com/Ln1m/dsh-chrome-suite.git",
+    "directory": "dsh-restart-button"
   },
-  "homepage": "https://github.com/Ln1m/dsh-head-restart#readme",
+  "homepage": "https://github.com/Ln1m/dsh-chrome-suite/tree/main/dsh-restart-button#readme",
   "bugs": {
-    "url": "https://github.com/Ln1m/dsh-head-restart/issues"
+    "url": "https://github.com/Ln1m/dsh-chrome-suite/issues"
   }
 }
