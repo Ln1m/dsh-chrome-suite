@@ -25,6 +25,14 @@ Or install the whole family on Windows PowerShell:
 ./install.ps1
 ```
 
+Install straight from the release, no clone needed:
+
+```sh
+dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-restart-button-0.1.0.tgz"
+dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-archive-button-0.1.0.tgz"
+dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-wallet-1.3.1.tgz"
+```
+
 Restart the web instance afterwards. Each package directory carries its own README.
 
 ## Screenshots

@@ -25,6 +25,14 @@ dsh plugin --profile web add file:<本仓库>/dsh-restart-button
 ./install.ps1
 ```
 
+不克隆仓库、直接从 Release 装（一行一个包）：
+
+```sh
+dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-restart-button-0.1.0.tgz"
+dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-archive-button-0.1.0.tgz"
+dsh plugin --profile web add "https://github.com/Ln1m/dsh-chrome-suite/releases/download/v0.1.0/dsh-wallet-1.3.1.tgz"
+```
+
 装完重启 web 实例。每个包目录里还有它自己的 README。
 
 ## 界面
