@@ -15,7 +15,7 @@
 | 余额接口 `GET api.deepseek.com/user/balance`（Bearer 鉴权），返回 `balance_infos[]`（currency/total_balance/granted_balance/topped_up_balance） | 官方 API 文档 |
 | **充值无 API**，只能跳官方网页 `platform.deepseek.com/top_up`（支付宝/微信，需实名） | 官方 |
 | 官方平台页面全部带 `CSP: frame-ancestors 'none'`，**禁止 iframe 内嵌** | 实测响应头 |
-| 官方价格页：基础价（8-17 前）+ 峰谷价（8-17 起，高峰=空闲 2 倍，北京 9-12/14-18） | api-docs.deepseek.com |
+| 官方价格页：基础价（8-17 前）+ 峰谷价（8-17 起，高峰=空闲 2 倍，北京 9-12/14-18；中国法定节假日除外） | api-docs.deepseek.com |
 | 会话成本 = token-meter 的 `tokenUsage` 投影 × 价格表（flash/pro） | 参考 dsh-balance-meter |
 
 参考项目：`dsh-balance-meter`（composer dock chip 余额+会话成本）、`dsh-deepseek-quota`（右下角浮动卡片）、`dsh-usage-plugin`（完整用量统计）、`dsh-balance-plugin`（余额+用量+三方插件管理）。
@@ -72,7 +72,7 @@ Client（浏览器）
 
 ## 六、发布结果
 
-- GitHub：https://github.com/Ln1m/dsh-foot-wallet（v1.0.1）
+- GitHub：https://github.com/Ln1m/dsh-wallet（v1.0.1）
 - npm：dsh-wallet@1.0.1
 - 附带修复 dsh-lt-tasks 图片（0.2.3，README 改 jsdelivr）
 
@@ -105,8 +105,11 @@ Client（浏览器）
 25. **本会话成本「全按当前时段计价」错误**：原实现用 `sessionProjections`（会话累计 token）直接 × `effectiveCostAt(当前时刻)`，导致高峰时段打开面板时，把整天（含空闲时段）的 token 全按高峰价算。→ **分段计费**：从事件流按 `bandAt(event.time)`（base/offPeak/peak）把每个会话的 token 分桶，成本 = Σ(各档 token × 各档单价)。会话成本改用 `perSession`（事件流分桶）而非 `sessionProjections`（无时间维度）。配套：`ensureSessionIngested` 在 cost 路由里对未扫过的旧会话按需回扫，避免切换到旧会话时成本归零。
 26. **运行副本位置变了**：声明 `dsh.bundle.patch` 后，重启时 dsh loader 会从 npm 把插件解析到 `profiles\web\node_modules\dsh-wallet`（而非旧的 `profiles\node_modules\dsh-wallet` 手动副本）。→ 本地改完要么同步到新位置，要么直接发 npm 新版本；手动副本路径已废弃。
 
+### v1.3.2 修复（2026-09-29，本地改动，未发布）
+27. **法定节假日被按高峰价计**：官方 2026-09-19 的峰谷时间说明明确「调休上班的周末、中国法定节假日全天按空闲时段计费」，而 `isPeakHour()` 只判了周末。→ 内置 2026 逐日假期表 `CN_HOLIDAYS`（国办发明电〔2025〕7 号），命中即返回 offPeak；未收录年份退回「仅周末空闲」判定，**换年必须补表**。
+
 ## 九、发布结果
 
-- GitHub：https://github.com/Ln1m/dsh-foot-wallet（v1.3.1）
+- GitHub：https://github.com/Ln1m/dsh-wallet（v1.3.1）
 - npm：dsh-wallet@1.3.1
 

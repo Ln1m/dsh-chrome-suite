@@ -1,7 +1,6 @@
 # dsh-wallet
 
-> Two builds: `main` is the **vk build** (vk slots only — install the [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite) contract + skeleton first); the `official` branch is the **vk-free build** (no vk dependency, official slots only). **Use the vk build** — position: pinned at the sidebar bottom (`vk.sidebar.footer`).
-> Conflicts: a slot renders only its highest-priority entry, and two registrations at the same priority throw; mutually exclusive with anything claiming the same position (see "How to use it / what it conflicts with" in [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite)).
+> This branch is the **vk build**: vk slots only, and [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite) (contract + layout) must be installed first. The vk-free build is on the [official branch](https://github.com/Ln1m/dsh-wallet/tree/official).
 
 A DeepSeek Harness (DSH) wallet plugin — a persistent panel at the bottom of the left sidebar showing your **DeepSeek account balance**, **today's total**, **current-session cost** (hover for the token / cost breakdown) and an **editable alert threshold**, with one-click links to the official recharge / API-key / usage pages, plus the model tool `query_deepseek_balance`. **Requires dsh-vk-suite**: the panel lands in its `vk.sidebar.footer` slot (persistent panel).
 
@@ -12,7 +11,7 @@ A DeepSeek Harness (DSH) wallet plugin — a persistent panel at the bottom of t
 | Balance | Official `GET api.deepseek.com/user/balance` (Bearer auth via the DSH credential `DEEPSEEK_API_KEY`) for the CNY / USD pools; 30s cache, exponential backoff from 5s up to 5min on failure |
 | Today's total | Local **per-day aggregation** over the session/event stream, sharing its source with the session cost (today ≥ the session's own share today). The official billing endpoint is hourly-bucketed and lags ~10–20 min, so it is used **only as background calibration** |
 | Session cost | `sessionProjections` tokenUsage × price table; `reasoningTokens` are already included in `outputTokens` and counted once; hover for input / cache-hit / output breakdown |
-| Peak pricing | Auto-switched by Beijing time: **weekends are off-peak all day**, weekdays 9:00–12:00 and 14:00–18:00 are peak (effective 2026-08-17 00:00; Flash repriced again at 2026-09-10 12:00) |
+| Peak pricing | Auto-switched by Beijing time: **weekends, Chinese public holidays and make-up working weekends are off-peak all day**; weekdays 9:00–12:00 and 14:00–18:00 are peak, excluding Chinese public holidays (effective 2026-08-17 00:00; Flash repriced again at 2026-09-10 12:00) |
 | Low-balance alert | Amber warning when CNY < ¥10 or USD < $2 |
 | Alert threshold | Editable per session (default ¥5), **persisted** to `~/.dsh/dsh-wallet.json`; warns to start a new chat when exceeded |
 | System notifications | Browser notification on low balance / over threshold, once per state transition |
@@ -25,11 +24,11 @@ A DeepSeek Harness (DSH) wallet plugin — a persistent panel at the bottom of t
 
 Dark theme:
 
-![dark](https://cdn.jsdelivr.net/gh/Ln1m/dsh-foot-wallet@main/assets/screenshot-panel.png)
+![dark](https://cdn.jsdelivr.net/gh/Ln1m/dsh-wallet@main/assets/screenshot-panel.png)
 
 Light theme:
 
-![light](https://cdn.jsdelivr.net/gh/Ln1m/dsh-foot-wallet@main/assets/screenshot-panel-light.png)
+![light](https://cdn.jsdelivr.net/gh/Ln1m/dsh-wallet@main/assets/screenshot-panel-light.png)
 
 The panel collapses to one line — "● Wallet ¥30.39 CNY ↻ ⌄" — and expands to:
 
@@ -97,6 +96,7 @@ Effective from 2026-09-10 12:00:
 
 - Peak pricing took effect at 2026-08-17 00:00 Beijing time; events before that are billed at base prices (input miss / cache hit / output: flash 1 / 0.02 / 2, pro 3 / 0.025 / 6).
 - The non-peak base prices are refreshed from the official pricing page; the peak bands have no public machine-readable form and stay hard-coded.
+- The per-day holiday table (State Council 2026 arrangement, 国办发明电〔2025〕7 号) is built into `lib/index.js` as `CN_HOLIDAYS`; **extend it every year** — years absent from the table fall back to the weekend-only rule.
 
 ## License
 

@@ -134,9 +134,18 @@ window.__ModuleLoader__.load({
       const compact = props && props.compact === true;
       const wide = props.wide;
       const sessions = props.sessions;
+      // 2026-09-30 修：会话列表快照只有 {ids,byId,phase,projectionsBySession}，没有 current。
+      // 旧写法恒取 undefined → 请求退化成 /wallet/api/cost（无 session）→ 宿主回 missing-session →
+      // 峰谷徽标不渲染、「本会话消耗」一直是 --。现行口径 = byId 里 retainedBy.mainView>0 的那条
+      //（与官方 ui-workspace 内部 mainSessionId 同款）。
       const currentSessionId = React.useSyncExternalStore(
         sessions && sessions.list ? (cb) => sessions.list.subscribe(cb) : () => () => {},
-        sessions && sessions.list ? () => sessions.list.getSnapshot().current : () => undefined,
+        sessions && sessions.list ? () => {
+          const snap = sessions.list.getSnapshot();
+          const rows = snap && snap.byId ? Object.values(snap.byId) : [];
+          for (const row of rows) if (row && row.retainedBy && (row.retainedBy.mainView || 0) > 0) return row.id;
+          return undefined;
+        } : () => undefined,
         () => undefined
       );
       const [view, setView] = React.useState(null);

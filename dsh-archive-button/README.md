@@ -1,5 +1,7 @@
 # dsh-archive-button（会话归档按钮）
 
+> 本分支是 **vk 版**：只注册 vk 槽，需先装 [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite)（契约 + 骨架）。零 vk 版见 [official 分支](https://github.com/Ln1m/dsh-archive-button/tree/official)。
+
 在左栏里放一个「归档」按钮：侧栏展开时落进官方**「工作区」标题行**、紧挨「添加工作区」图标右侧；那一行不在时退回页脚胶囊按钮。
 
 ## 位置与外观

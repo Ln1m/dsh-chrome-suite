@@ -10,6 +10,8 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+// 峰谷口径与节假日表只有一份，见 price-band.js（本机 scripts\token\dsh-usage-stats.mjs 也 import 它）
+import { isPeakHour } from "./price-band.js";
 
 export const name = "dsh-wallet";
 export const inject = ["webServer", "sessions", "credentials", "sessionProjections", "sessionQuery"];
@@ -37,22 +39,6 @@ const PRO_PEAK = {
 const PEAK_PRICING_START_MS = Date.UTC(2026, 7, 16, 16, 0, 0);
 // Flash 第二次调价生效时间：北京时间 2026-09-10 12:00 = UTC 2026-09-10 04:00
 const PEAK_PRICING_V2_START_MS = Date.UTC(2026, 8, 10, 4, 0, 0);
-
-/** 是否高峰时段（北京时间「周一至周五」9:00-12:00、14:00-18:00）。
- *  周末全天按空闲价计——漏判星期会让周六/周日全天被按 2 倍高峰价计费
- *  （2026-09-12 实测：周六会话面板值恰为真值的 2.000 倍）。 */
-function isPeakHour(now = new Date()) {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(now);
-    const weekday = parts.find((p) => p.type === 'weekday')?.value;
-    if (weekday === 'Sat' || weekday === 'Sun') return false; // 周末全天空闲价
-    const hour = Number(parts.find((p) => p.type === 'hour')?.value);
-    if (Number.isNaN(hour)) return false;
-    return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18);
-  } catch {
-    return false;
-  }
-}
 
 /** 由模型名判断计价档位（flash/pro）。 */
 function pricingKeyOf(model) {

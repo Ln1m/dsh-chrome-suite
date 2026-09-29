@@ -1,7 +1,6 @@
 # dsh-wallet
 
-> 两个版本：`main` = **vk 版**（只注册 vk 槽，需先装 [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite) 契约 + 骨架）；`official` 分支 = **官方挂载版**（零 vk 依赖，挂官方槽）。**推荐 vk 版** —— 位置：左栏底部常驻（`vk.sidebar.footer`）。
-> 冲突：一个槽位只渲染优先级最高的一条，同优先级重复注册会直接抛错；与占同一位置的插件互斥（详见 [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite) 的「推荐怎么用 / 会跟谁冲突」）。
+> 本分支是 **vk 版**：只注册 vk 槽，需先装 [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite)（契约 + 骨架）。零 vk 版见 [official 分支](https://github.com/Ln1m/dsh-wallet/tree/official)。
 
 [English](README.en.md) · 中文
 
@@ -14,7 +13,7 @@ DeepSeek Harness（DSH）钱包插件 —— 左栏底部常驻面板，显示 *
 | 余额查询 | 官方 `GET api.deepseek.com/user/balance`（Bearer 鉴权，读 DSH 凭据 `DEEPSEEK_API_KEY`），CNY / USD 双余额池，30 秒缓存；失败按 5s → 5min 指数退避重试 |
 | 今日累计 | 本地 session/event 事件流**分日聚合**，与「本会话消耗」同源（今日累计 ≥ 本会话的今日部分，不会出现假矛盾）。官方账单接口按小时桶结算、最近约 10~20 分钟未入账，只作后台校准参考，不作展示口径 |
 | 会话成本 | `sessionProjections` 的 tokenUsage × 价格表实时估算；`reasoningTokens` 已含在 `outputTokens` 内只计一次；悬停展开输入 / 缓存命中 / 输出明细 |
-| 峰谷计价 | 北京时间自动切档：**周末全天空闲价**，工作日 9:00–12:00、14:00–18:00 为高峰价（2026-08-17 00:00 起生效；Flash 于 2026-09-10 12:00 再次调价） |
+| 峰谷计价 | 北京时间自动切档：**周末、中国法定节假日、调休上班的周末全天按空闲价**；工作日 9:00–12:00、14:00–18:00 为高峰价，中国法定节假日除外（2026-08-17 00:00 起生效；Flash 于 2026-09-10 12:00 再次调价） |
 | 低余额告警 | CNY < ¥10 或 USD < $2 时标黄 |
 | 提醒阈值 | 单会话可编辑（默认 ¥5），**持久化**到 `~/.dsh/dsh-wallet.json`；超限提示新建对话 |
 | 系统通知 | 低余额 / 超阈值时浏览器系统通知，仅在状态转变时各触发一次 |
@@ -27,11 +26,11 @@ DeepSeek Harness（DSH）钱包插件 —— 左栏底部常驻面板，显示 *
 
 深色主题：
 
-![深色](https://cdn.jsdelivr.net/gh/Ln1m/dsh-foot-wallet@main/assets/screenshot-panel.png)
+![深色](https://cdn.jsdelivr.net/gh/Ln1m/dsh-wallet@main/assets/screenshot-panel.png)
 
 浅色主题：
 
-![浅色](https://cdn.jsdelivr.net/gh/Ln1m/dsh-foot-wallet@main/assets/screenshot-panel-light.png)
+![浅色](https://cdn.jsdelivr.net/gh/Ln1m/dsh-wallet@main/assets/screenshot-panel-light.png)
 
 面板可折叠：收起态一行「● 钱包 ¥30.39 CNY ↻ ⌄」，展开态：
 
@@ -99,6 +98,7 @@ node $bin plugin --profile web add file:D:/DeepSeek_harness/plugins/dsh-wallet
 
 - 峰谷计价自北京时间 2026-08-17 00:00 起生效；2026-08-17 之前的历史事件按基础价计（未命中输入 / 缓存命中输入 / 输出：flash 1 / 0.02 / 2，pro 3 / 0.025 / 6）。
 - 非峰谷的基础价会尝试从官方定价页抓取覆盖；峰谷价无公开解析标准，用插件内置硬编码。
+- 逐日假期表按《国务院办公厅关于 2026 年部分节假日安排的通知》（国办发明电〔2025〕7 号）内置在 `lib/index.js` 的 `CN_HOLIDAYS`；**换年要补表**，未收录年份退回「仅周末空闲」判定。
 
 ## 许可
 
