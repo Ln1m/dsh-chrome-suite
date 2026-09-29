@@ -42,8 +42,15 @@ window.__ModuleLoader__.load({
 .dab-slot.dab-rail{display:none;}
 /* 已落进官方「工作区」标题行时，留在原插槽里的根节点不产生任何盒子（按钮本体已 portal 到那一行） */
 .dab-slot.dab-row{display:contents;}
-/* 自建宿主节点：按钮 portal 的家；被搬进「添加工作区」图标旁边 */
-.dab-host{display:inline-flex;align-items:center;flex:none;}
+/* 自建宿主节点：按钮 portal 的家。落点是底部「设置」那一行右侧、与设置各占一半（2026-09-29 用户口径） */
+.dab-host{display:flex;align-items:center;flex:1 1 0;min-width:0;}
+/* 设置行：行内两项等分。官方触发行不带构建哈希之外的信息，用 [class*=triggerRow] 按后缀匹配 */
+[class*=triggerRow]{display:flex!important;align-items:center;gap:6px;}
+[class*=triggerRow] button[aria-label="设置"]{flex:1 1 0;min-width:0;width:auto;}
+/* 侧栏收起成 rail：方向由行变窄，两块都回到图标尺寸、不再等分 */
+[class*=collapsed] [class*=triggerRow] button[aria-label="设置"]{flex:0 0 auto;width:auto;}
+[class*=collapsed] .dab-host{flex:0 0 auto;}
+[class*=collapsed] .dab-host .dab-ibtn{flex:0 0 auto;width:32px;}
 .dab-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:30px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:15px;background:0 0;color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family,inherit);font-size:13px;font-weight:400;line-height:20px;cursor:pointer;white-space:nowrap;}
 .dab-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);}
 .dab-btn:disabled{cursor:default;color:var(--dsw-alias-label-dimmed);}
@@ -52,7 +59,7 @@ window.__ModuleLoader__.load({
 .dab-btn.dab-ok{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary);}
 .dab-btn svg{display:block;flex:none;}
 /* 图标态：进「工作区」行后只留图标，尺寸/圆角对齐官方那两颗 28×28 图标按钮 */
-.dab-ibtn{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:none;border-radius:6px;background:0 0;color:var(--dsw-alias-label-secondary);font-family:inherit;cursor:pointer;}
+.dab-ibtn{display:inline-flex;align-items:center;justify-content:center;flex:1 1 auto;width:100%;height:32px;padding:0;border:none;border-radius:6px;background:0 0;color:var(--dsw-alias-label-secondary);font-family:inherit;cursor:pointer;}
 .dab-ibtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);}
 .dab-ibtn:active:not(:disabled){transform:scale(.94);}
 .dab-ibtn:disabled{cursor:default;color:var(--dsw-alias-label-dimmed);}
@@ -134,7 +141,14 @@ window.__ModuleLoader__.load({
         if (!ReactDOM || typeof ReactDOM.createPortal !== 'function') { setDocked(false); return; }
 
         const findTarget = () => {
-          // ① 官方「添加工作区」按钮：aria-label 稳定，不含构建哈希
+          // ① 底部「设置」那一行：落点在设置右侧，与设置各占一半（用户 2026-09-29 口径）
+          let settingsBtn = null;
+          try { settingsBtn = document.querySelector('button[aria-label="设置"]'); } catch { settingsBtn = null; }
+          if (settingsBtn && settingsBtn.parentElement) {
+            const row = typeof settingsBtn.closest === 'function' ? settingsBtn.closest('[class*="triggerRow"]') : null;
+            if (row) return { row, after: settingsBtn.parentElement };
+          }
+          // ② 官方「添加工作区」按钮：aria-label 稳定，不含构建哈希
           let addBtn = null;
           try { addBtn = document.querySelector('[aria-label="添加工作区"]'); } catch { addBtn = null; }
           if (addBtn && addBtn.parentElement && addBtn.parentElement.parentElement) {
@@ -144,7 +158,7 @@ window.__ModuleLoader__.load({
             // 整体左移，归档图标落在「添加工作区」右边 4px，行宽 260/行高 36 都不变。
             return { row: addBtn.parentElement.parentElement, after: addBtn.parentElement };
           }
-          // ② 退化：按「工作区」标签文字找那一行（类名带哈希，只按后缀匹配）
+          // ③ 退化：按「工作区」标签文字找那一行（类名带哈希，只按后缀匹配）
           let label = null;
           try {
             label = [...document.querySelectorAll('[class*="sectionLabel"]')]

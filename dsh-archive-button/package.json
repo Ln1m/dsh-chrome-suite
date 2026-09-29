@@ -1,6 +1,6 @@
 {
     "name": "dsh-archive-button",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "DSH session archive button: an icon button portaled into the sidebar's workspace-title row (right next to the official Add-workspace icon), falling back to an inline footer capsule when that row is not mounted. First click dry-runs a scan of DSH sessions idle for more than 3 days, second click packs each one into a byte-verified zip under <DSH_ROOT>\\archive\\dsh-sessions (DSH_ROOT defaults to %USERPROFILE%\\DeepSeek_harness) and removes the original folder. Host half registers /dsh-archive/* routes and runs archive-dsh-sessions.ps1; client half renders the button. Never triggered by the model.",
     "type": "module",
     "main": "lib/index.js",
