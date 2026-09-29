@@ -1,5 +1,5 @@
 {
-  "name": "dsh-restart-button",
+  "name": "dsh-head-restart",
   "version": "0.1.0",
   "description": "DSH restart button: adds a two-click-confirm 'Restart DSH' button beside the stock Session-log button in the session header. The handler captures THIS process's own listen port, node executable, entry script, cwd and argv, then hands them to a detached launcher so exactly that instance restarts (two instances sharing one Harness home no longer kill each other). Triggered only by the user, never by the model.",
   "type": "module",
@@ -28,11 +28,6 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "react": "^18.2.0"
   },
-  "files": [
-    "lib",
-    "cordis.patch.yml",
-    "scripts"
-  ],
   "license": "MIT",
   "keywords": [
     "dsh",
