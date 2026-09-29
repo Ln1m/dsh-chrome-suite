@@ -68,7 +68,7 @@ Client（浏览器）
 ```powershell
 $bin = "<DSH 安装根>\node_modules\@deepseek-ai\dsh\lib\bin.js"
 node $bin plugin --profile web remove dsh-wallet
-node $bin plugin --profile web add file:D:/DeepSeek_harness/plugins/dsh-wallet
+node $bin plugin --profile web add file:<DSH 安装根>/plugins/dsh-wallet
 ```
 
 源码真源：本仓库。改完源码须 remove + add 刷新运行副本（`~\.dsh\profiles\web\node_modules\dsh-wallet`），再重启 DSH。

@@ -99,7 +99,7 @@ window.__ModuleLoader__.load({
 .dsw-btn:hover{background:var(--dsw-alias-interactive-bg-hover);}
 .dsw-btn.dsw-primary{background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-foreground);}
 .dsw-btn.dsw-primary:hover{filter:brightness(1.08);}
-.dsw-tooltip{position:absolute;left:12px;right:12px;z-index:100;background:var(--dsw-specific-sidebar-fill);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:8px 10px;box-shadow:var(--dsw-shadow-lv2);display:flex;flex-direction:column;gap:4px;}
+.dsw-tooltip{position:absolute;left:12px;right:12px;min-width:220px;z-index:100;background:var(--dsw-specific-sidebar-fill);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:8px 10px;box-shadow:var(--dsw-shadow-lv2);display:flex;flex-direction:column;gap:4px;}
 .dsw-tooltip-title{font-size:11px;font-weight:600;color:var(--dsw-alias-label-secondary);margin-bottom:2px;}
 .dsw-tooltip-row{display:flex;gap:10px;font-size:11px;align-items:baseline;}
 .dsw-tooltip-name{color:var(--dsw-alias-label-secondary);min-width:46px;white-space:nowrap;flex:none;}
@@ -257,11 +257,11 @@ window.__ModuleLoader__.load({
       const showTip = (e) => {
         if (!cost || cost.ok !== true || !cost.breakdown) return;
         const r = e.currentTarget.getBoundingClientRect();
-        const d = dockRef.current ? dockRef.current.getBoundingClientRect() : { top: 0 };
-        setTip({ top: r.bottom - d.top + 4 });
+        const d = dockRef.current ? dockRef.current.getBoundingClientRect() : { bottom: 0 };
+        setTip({ bottom: d.bottom - r.top + 4 });
       };
 
-      const tooltip = tip && cost && cost.ok === true && cost.breakdown ? h('div', { className: 'dsw-tooltip', style: { top: tip.top + 'px' } },
+      const tooltip = tip && cost && cost.ok === true && cost.breakdown ? h('div', { className: 'dsw-tooltip', style: { bottom: tip.bottom + 'px' } },
         h('div', { className: 'dsw-tooltip-title' }, '本会话明细'),
         h('div', { className: 'dsw-tooltip-row' },
           h('span', { className: 'dsw-tooltip-name' }, '输入'),

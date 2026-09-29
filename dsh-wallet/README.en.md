@@ -66,7 +66,7 @@ On this machine the local source is the single source of truth:
 ```powershell
 $bin = "<DSH install root>\node_modules\@deepseek-ai\dsh\lib\bin.js"
 node $bin plugin --profile web remove dsh-wallet
-node $bin plugin --profile web add file:D:/DeepSeek_harness/plugins/dsh-wallet
+node $bin plugin --profile web add file:<DSH 安装根>/plugins/dsh-wallet
 ```
 
 Source of truth: this repository. After editing the source you must remove + add to refresh the running copy (`~\.dsh\profiles\web\node_modules\dsh-wallet`), then restart DSH.
