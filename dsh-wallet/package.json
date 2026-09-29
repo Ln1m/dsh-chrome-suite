@@ -1,0 +1,62 @@
+{
+    "name": "dsh-wallet",
+    "version": "1.3.1",
+    "description": "DeepSeek 钱包（DSH 插件）：显示账户余额 · 今日累计 · 本会话消耗（悬停看 token/金额明细）· 可编辑提醒阈值与低余额/超阈值系统通知，一键打开官方充值 / API Key / 用量页，并注册 query_deepseek_balance 工具。入口注册在官方 sidebar.footer.action 槽；装了 dsh-vk-suite 时用它的常驻面板位。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+        ".": {
+            "default": "./lib/index.js"
+        },
+        "./client": {
+            "default": "./lib/client.js"
+        },
+        "./package.json": "./package.json"
+    },
+    "dsh": {
+        "bundle": {
+            "patch": "./cordis.patch.yml"
+        },
+        "client": {
+            "inject": [
+                "@deepseek-ai/dsh-client-ui-sidebar"
+            ],
+            "platform": "web"
+        }
+    },
+    "peerDependencies": {
+        "@deepseek-ai/cordis": "^4.0.1",
+        "@deepseek-ai/dsh-tools": "^0.1.0-rc.6 || ^0.1.5-rc.2",
+        "react": "^18.2.0"
+    },
+    "files": [
+        "lib",
+        "cordis.patch.yml",
+        "README.md",
+        "README.en.md",
+        "docs",
+        "LICENSE",
+        "assets"
+    ],
+    "license": "MIT",
+    "keywords": [
+        "dsh",
+        "deepseek-harness",
+        "plugin",
+        "deepseek",
+        "balance",
+        "wallet",
+        "usage",
+        "quota"
+    ],
+    "author": "Ln1m (https://github.com/Ln1m)",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Ln1m/dsh-chrome-suite.git",
+        "directory": "dsh-wallet"
+    },
+    "homepage": "https://github.com/Ln1m/dsh-chrome-suite/tree/main/dsh-wallet#readme",
+    "bugs": {
+        "url": "https://github.com/Ln1m/dsh-chrome-suite/issues"
+    }
+}

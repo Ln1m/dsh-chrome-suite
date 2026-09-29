@@ -1,0 +1,7 @@
+# dsh-archive-button plugin patch: registers the sidebar archive button into the
+# web profile roster. The node half (exports ".") runs in the host process and
+# serves /dsh-archive/* routes; the `dsh.client` declaration in package.json
+# loads the browser half (exports "./client") as a sidebar footer action dock.
+- insert:
+    - id: dsh-archive-button
+      name: 'dsh-archive-button'
