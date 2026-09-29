@@ -1,16 +1,18 @@
 // dsh-archive-button —— Host half
-// Serves the sidebar button's three routes:
+// Serves the sidebar button's routes and the settings page's archive listing:
 //   GET  /dsh-archive/status -> { running, lastExit, result, scan }
 //   POST /dsh-archive/scan   -> dry-run scan (archive-dsh-sessions.ps1 -DryRun), returns the pending summary
 //   POST /dsh-archive/run    -> start the real archive in the background (-Force), returns immediately
+//   GET  /dsh-archive/list   -> archived sessions on disk (zip entries) + last run/scan summaries
+//   POST /dsh-archive/restore-> restore one archived zip back into the live sessions tree
 // Every PowerShell child runs hidden with stdio ignored; results are exchanged
 // through the JSON files the script writes. Never triggered by the model.
 
 import { spawn } from "node:child_process";
-import { readFileSync, appendFileSync, existsSync, renameSync, statSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { readFileSync, appendFileSync, existsSync, renameSync, statSync, readdirSync } from "node:fs";
+import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
 
 export const name = "dsh-archive-button";
 export const inject = ["webServer"];
@@ -24,6 +26,8 @@ const ARCHIVE_DIR = join(ROOT, "archive", "dsh-sessions");
 const RESULT_FILE = ARCHIVE_DIR + "\\.last-result.json";
 const SCAN_FILE = ARCHIVE_DIR + "\\.scan-result.json";
 const LOG = join(ROOT, "logs", "dsh-archive-button.log");
+const RESTORE_SCRIPT = join(ROOT, "scripts", "restore-dsh-session.ps1");
+const SESSIONS_ROOT = join(homedir(), ".dsh", "sessions");
 
 let running = false;
 let lastExit = null;
@@ -44,13 +48,16 @@ function readJson(path) {
 }
 
 function runScript(extraArgs, resultFile) {
+  return runPowershell(["-File", ACTIVE_SCRIPT].concat(extraArgs).concat(["-ResultFile", resultFile]));
+}
+
+/** 跑一段 PowerShell 脚本文件；stdio 丢弃，退出码即结果。 */
+function runPowershell(argsBefore) {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (code) => { if (!settled) { settled = true; resolve(code); } };
     try {
-      const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", ACTIVE_SCRIPT]
-        .concat(extraArgs)
-        .concat(["-ResultFile", resultFile]);
+      const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"].concat(argsBefore);
       const child = spawn(PS, args, { stdio: "ignore", windowsHide: true });
       child.on("exit", (code) => finish(code === null || code === undefined ? -1 : code));
       child.on("error", (e) => { log("spawn error: " + (e && e.message)); finish(-1); });
@@ -59,6 +66,37 @@ function runScript(extraArgs, resultFile) {
       finish(-1);
     }
   });
+}
+
+/** 归档目录扫描：<ARCHIVE_DIR>\<workspace>\<yyyy-MM>\<sessionId>.zip */
+function listArchived() {
+  const out = [];
+  let workspaces = [];
+  try { workspaces = readdirSync(ARCHIVE_DIR, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { return out; }
+  for (const ws of workspaces) {
+    const wsDir = join(ARCHIVE_DIR, ws);
+    let months = [];
+    try { months = readdirSync(wsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { continue; }
+    for (const month of months) {
+      const monthDir = join(wsDir, month);
+      let files = [];
+      try { files = readdirSync(monthDir).filter((n) => n.toLowerCase().endsWith(".zip")); } catch { continue; }
+      for (const name of files) {
+        const full = join(monthDir, name);
+        let size = 0;
+        let mtime = "";
+        try { const st = statSync(full); size = st.size; mtime = st.mtime.toISOString(); } catch { /* ignore */ }
+        out.push({ id: basename(name, ".zip"), name, workspace: ws, month, path: full, size, mtime });
+      }
+    }
+  }
+  out.sort((a, b) => String(b.mtime).localeCompare(String(a.mtime)));
+  return out;
+}
+
+/** 归档 zip 还原后的落点：<SessionsRoot>\<workspace>\<sessionId> */
+function restoredDir(entry) {
+  return join(SESSIONS_ROOT, entry.workspace, entry.id);
 }
 
 export function apply(ctx) {
@@ -120,5 +158,43 @@ export function apply(ctx) {
     },
   });
 
-  log("routes registered: /dsh-archive/status /dsh-archive/scan /dsh-archive/run");
+  webServer.register({
+    kind: "exact",
+    path: "/dsh-archive/list",
+    handler: async (req, res) => {
+      const entries = listArchived();
+      send(res, {
+        ok: true,
+        entries: entries.map((e) => Object.assign({}, e, { restored: existsSync(restoredDir(e)) })),
+        lastResult: readJson(RESULT_FILE),
+        scan: readJson(SCAN_FILE),
+        sessionsRoot: SESSIONS_ROOT,
+      });
+    },
+  });
+
+  webServer.register({
+    kind: "exact",
+    path: "/dsh-archive/restore",
+    handler: async (req, res) => {
+      if (req.method !== "POST") { send(res, { ok: false, error: "method-not-allowed" }); return; }
+      let body = "";
+      try { body = await new Promise((resolve) => { const chunks = []; req.on("data", (c) => chunks.push(c)); req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8"))); }); } catch { /* ignore */ }
+      let payload = null;
+      try { payload = JSON.parse(body || "{}"); } catch { /* ignore */ }
+      const wanted = payload === null ? "" : String(payload.path || payload.id || "");
+      if (wanted.length === 0) { send(res, { ok: false, error: "body needs { path } or { id }" }); return; }
+      const entry = listArchived().find((e) => e.path === wanted || e.id === wanted || e.name === wanted);
+      if (!entry) { send(res, { ok: false, error: "archive entry not found" }); return; }
+      if (!existsSync(RESTORE_SCRIPT)) { send(res, { ok: false, error: "restore script missing: " + RESTORE_SCRIPT }); return; }
+      log("restore requested: " + entry.path);
+      const code = await runPowershell(["-File", RESTORE_SCRIPT, "-Zip", entry.path]);
+      const dest = restoredDir(entry);
+      const present = existsSync(dest);
+      log("restore finished exit=" + code + " present=" + present);
+      send(res, { ok: code === 0 && present, exitCode: code, restored: present, target: dest, id: entry.id });
+    },
+  });
+
+  log("routes registered: /dsh-archive/status /dsh-archive/scan /dsh-archive/run /dsh-archive/list /dsh-archive/restore");
 }
