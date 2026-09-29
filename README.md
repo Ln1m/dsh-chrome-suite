@@ -1,24 +1,33 @@
-# dsh-chrome-suite
+# dsh-restart-button
 
-中文 | [English](README.en.md)
+> 本分支是 **零 vk 版**：只注册官方槽，代码不引用任何 vk 槽，装不装 dsh-vk-suite 都一样。vk 版见 [main 分支](https://github.com/Ln1m/dsh-restart-button/tree/main)。
 
-窗口边框部件：重启按钮、归档按钮、钱包
+[English](README.en.md) · 中文
 
-## 包
+![会话头右侧的重启按钮界面实拍](assets/dsh-restart-button.png)
 
-| 目录 | 作用 |
-|---|---|
-| `dsh-restart-button` | 会话头两击确认「重启 DSH」，按本进程身份重启同一实例 |
-| `dsh-archive-button` | 侧栏两击确认归档：把空闲超过 3 天的会话压成 zip 并删除原目录 |
-| `dsh-wallet` | 余额 / 本会话消耗 / 峰谷价，一键充值 |
+*界面实拍：截自本机运行中的 DSH 实例，示例内容已脱敏。*
 
-## 版本线
+会话头上一枚两击确认的「重启 DSH」按钮。它先抓本进程的监听端口、node 可执行文件、入口脚本、工作目录与 argv，写成请求文件后交给独立进程按这套身份重启同一个实例——两个实例共用一份 Harness home 时，不会在 A 里点重启却杀掉 B。
 
-| 版本 | 对应 DSH | 说明 |
+只用用户点，模型永远不触发。
+
+## 装
+
+```sh
+dsh plugin --profile web add file:<本仓库>
+```
+
+装完重启 web 实例。
+
+## 环境变量
+
+| 变量 | 默认 | 说明 |
 |---|---|---|
-| `v0.1.2` | 0.1.7 | 本机 0.1.7 线继续开发的功能（本次同步） |
-| `v0.1.0` | 0.1.6 | 0.1.6 线的最后一版，保留可用、不再更新 |
+| `DSH_ROOT` | `~/DeepSeek_harness` | 日志与重启请求文件的落点 |
 
-## 许可
+## 前提
 
-MIT
+- Windows：重启链是 wscript → powershell，完全脱离 web 进程
+- 重启脚本随本仓库提供（`scripts/dsh-restart-instance.vbs` + `scripts/dsh-restart-instance.ps1`），装完即用
+- 包内脚本优先；`<DSH_ROOT>\scripts\dsh-restart-instance.vbs` 存在时作为回退（想用自己那份就放在那里）
