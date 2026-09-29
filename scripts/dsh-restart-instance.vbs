@@ -1,4 +1,4 @@
-﻿' dsh-restart-instance.vbs - hidden launcher for one dsh restart.
+' dsh-restart-instance.vbs - hidden launcher for one dsh restart.
 '
 ' Starts a detached PowerShell worker (window style 0, no wait) so the server
 ' process can die immediately after answering the browser the restart request.
