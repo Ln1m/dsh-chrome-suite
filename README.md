@@ -1,7 +1,7 @@
 # dsh-restart-button
 
-> 本分支是 **vk 版**：只注册 vk 槽，需先装 [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite)（契约 + 骨架）。零 vk 版见 [official 分支](https://github.com/Ln1m/dsh-head-restart/tree/official)。
-> **两个版本推荐用 vk 版**：左栏的 Tab 切换（会话 / 文件 / 任务 / 工具）与右栏、设置的位置都由 [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite)（契约 + 骨架）提供，vk 版才装得进这些位置；官方挂载版不依赖骨架，只挂官方槽，形态受官方界面限制。
+> 两个版本：`main` = **vk 版**（只注册 vk 槽，需先装 [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite) 契约 + 骨架）；`official` 分支 = **官方挂载版**（零 vk 依赖，挂官方槽）。**推荐 vk 版** —— 位置：会话头右上角（`conversation.session.header.corner`）。
+> 冲突：一个槽位只渲染优先级最高的一条，同优先级重复注册会直接抛错；与占同一位置的插件互斥（详见 [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite) 的「推荐怎么用 / 会跟谁冲突」）。
 
 [English](README.en.md) · 中文
 
