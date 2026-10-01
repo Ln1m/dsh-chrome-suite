@@ -7,11 +7,13 @@
 // 浏览器只访问本机同源路由，Key 不出本机。
 
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, delimiter as PATH_DELIMITER } from "node:path";
 // 峰谷口径与节假日表只有一份，见 price-band.js（本机 scripts\token\dsh-usage-stats.mjs 也 import 它）
 import { isPeakHour } from "./price-band.js";
+// 存档会话日志的容器解码（zip → 多帧 zstd → JSONL），见文件头注释
+import { listArchiveZips, readArchiveEntryInfo, readArchiveSession, eachArchiveEvent } from "./archive-usage.js";
 
 export const name = "dsh-wallet";
 export const inject = ["webServer", "sessions", "credentials", "sessionProjections", "sessionQuery"];
@@ -251,9 +253,28 @@ export function apply(ctx) {
   const USAGE_KEEP_MS = 90 * 86400000;
   const perDay = new Map(); // dayKey -> { uncachedInputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, cost, requests }
   const perSession = new Map(); // sessionId -> { base, offPeak, peak } 各计费档 token 桶（分段计费用）
+  // —— 看板旁路聚合（只增不改：既有三条口径与 /wallet/api/usage 载荷保持原样）——
+  const perDayBand = new Map(); // dayKey -> { peakCost, offPeakCost, peakTokens, offPeakTokens }
+  const perDayHour = new Map(); // "dayKey|hour" -> { cost, tokens, requests }
+  const perSessionDay = new Map(); // sessionId -> Map<dayKey, 完整日记录（emptySessionDay）>
+  const perSessionHour = new Map(); // sessionId -> Map<"dayKey|hour", { cost, tokens, requests }>
+  const sessionLastAt = new Map(); // sessionId -> 该会话最近一条计费事件的时间戳
   const scannedSessions = new Set(); // 已摄入过事件的会话 id
+  const liveSessionIds = new Set(); // 活动区当前存在的会话 id（只用于存档缓存排除，不参与按需回扫判定）
   const liveSeqs = new Map(); // sessionId -> 已实时摄入的最大 seq
   let usageReady = false;
+
+  // —— 存档扫描状态（活动区之外的历史只存在于 archive\dsh-sessions\*.zip）——
+  // DSH_USAGE_ARCHIVE（; 分隔多个根）设置了就以它为准，否则用本机默认存档目录
+  const ARCHIVE_DIRS = (process.env.DSH_USAGE_ARCHIVE
+    ? String(process.env.DSH_USAGE_ARCHIVE).split(PATH_DELIMITER)
+    : [join(homedir(), "DeepSeek_harness", "archive", "dsh-sessions")]
+  ).filter((v) => typeof v === "string" && v.length > 0 && v.trim().length > 0);
+  const ARCHIVE_CACHE_FILE = process.env.DSH_WALLET_ARCHIVE_CACHE || join(CONFIG_DIR, "dsh-wallet-archive.json");
+  const ARCHIVE_CACHE_VERSION = 1;
+  const archiveSeenZips = Object.create(null); // zip 绝对路径 -> "mtime:size" 指纹
+  const archivedSessions = new Set(); // 由存档并入的会话 id（回写缓存用）
+  const archiveStatus = { running: false, done: false, scanned: 0, pending: 0, merged: 0, sessions: 0, error: null, scannedAt: 0 };
 
   function dayKeyOf(time) {
     const d = new Date(time);
@@ -269,6 +290,27 @@ export function apply(ctx) {
   function emptyBuckets() {
     return {
       uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
+      inputCost: 0, cacheReadCost: 0, cacheWriteCost: 0, outputCost: 0,
+    };
+  }
+
+  function emptyDayBand() {
+    return {
+      peakCost: 0, offPeakCost: 0, peakTokens: 0, offPeakTokens: 0,
+      inputCost: 0, cacheReadCost: 0, cacheWriteCost: 0, outputCost: 0,
+    };
+  }
+
+  function emptyHourAgg() {
+    return { cost: 0, tokens: 0, requests: 0 };
+  }
+
+  // 会话×日记录：存档缓存按固定字段顺序序列化，见 encodeSessionDay / decodeSessionDay
+  function emptySessionDay() {
+    return {
+      cost: 0, requests: 0,
+      uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
+      peakCost: 0, offPeakCost: 0, peakTokens: 0, offPeakTokens: 0,
       inputCost: 0, cacheReadCost: 0, cacheWriteCost: 0, outputCost: 0,
     };
   }
@@ -302,6 +344,9 @@ export function apply(ctx) {
     const outputCost = costOfTokens(output, cfg.outputPerMillion);
     const cost = inputCost + cacheReadCost + cacheWriteCost + outputCost;
     const day = dayKeyOf(event.time);
+    // 本事件所属计费档：日桶、会话桶、看板旁路桶共用这一次判定
+    const band = bandAt(event.time);
+    const tokens = input + output + cacheRead + cacheWrite;
     const agg = perDay.get(day) || emptyDayAgg();
     agg.uncachedInputTokens += input;
     agg.outputTokens += output;
@@ -310,8 +355,35 @@ export function apply(ctx) {
     agg.cost += cost;
     agg.requests += 1;
     perDay.set(day, agg);
+    // —— 看板旁路聚合 ——
+    const dayBand = perDayBand.get(day) || emptyDayBand();
+    if (band === "peak") { dayBand.peakCost += cost; dayBand.peakTokens += tokens; }
+    else { dayBand.offPeakCost += cost; dayBand.offPeakTokens += tokens; }
+    dayBand.inputCost += inputCost; dayBand.cacheReadCost += cacheReadCost;
+    dayBand.cacheWriteCost += cacheWriteCost; dayBand.outputCost += outputCost;
+    perDayBand.set(day, dayBand);
+    const hourKey = day + "|" + new Date(event.time).getHours();
+    const hourAgg = perDayHour.get(hourKey) || emptyHourAgg();
+    hourAgg.cost += cost; hourAgg.tokens += tokens; hourAgg.requests += 1;
+    perDayHour.set(hourKey, hourAgg);
+    let sDays = perSessionDay.get(sessionId);
+    if (!sDays) { sDays = new Map(); perSessionDay.set(sessionId, sDays); }
+    const sDay = sDays.get(day) || emptySessionDay();
+    sDay.cost += cost; sDay.requests += 1;
+    sDay.uncachedInputTokens += input; sDay.outputTokens += output;
+    sDay.cacheReadTokens += cacheRead; sDay.cacheWriteTokens += cacheWrite;
+    if (band === "peak") { sDay.peakCost += cost; sDay.peakTokens += tokens; }
+    else { sDay.offPeakCost += cost; sDay.offPeakTokens += tokens; }
+    sDay.inputCost += inputCost; sDay.cacheReadCost += cacheReadCost;
+    sDay.cacheWriteCost += cacheWriteCost; sDay.outputCost += outputCost;
+    sDays.set(day, sDay);
+    let sHours = perSessionHour.get(sessionId);
+    if (!sHours) { sHours = new Map(); perSessionHour.set(sessionId, sHours); }
+    const sHour = sHours.get(hourKey) || emptyHourAgg();
+    sHour.cost += cost; sHour.tokens += tokens; sHour.requests += 1;
+    sHours.set(hourKey, sHour);
+    if (event.time > (sessionLastAt.get(sessionId) || 0)) sessionLastAt.set(sessionId, event.time);
     // 按计费档位分桶（供本会话分段计费；金额同样按该事件时刻的价格累计，跨调价点也不会重算错）
-    const band = bandAt(event.time);
     const sagg = perSession.get(sessionId) || emptySessionAgg();
     const b = sagg[band];
     b.uncachedInputTokens += input;
@@ -374,7 +446,23 @@ export function apply(ctx) {
     } catch { /* 扫描失败忽略 */ }
     usageReady = true;
   }
+  // 全量回扫照旧在后台跑；存档链只等「活动区会话 id 清单」——那份清单解析很快，
+  // 而全量回扫在 226 个会话上要几分钟，等它才装载缓存会让看板好几分钟看不到存档数据。
   scanHistory();
+  const liveIdsReady = (async () => {
+    if (!sessionQuery) return;
+    try {
+      const list = await sessionQuery.listSessions();
+      for (const record of list || []) {
+        const id = record && record.header && String(record.header.id || "");
+        if (id) liveSessionIds.add(id);
+      }
+    } catch { /* 取不到清单时按「没有活动区会话」处理，极端情况下宁可多算也不漏算 */ }
+  })();
+  liveIdsReady
+    .then(() => loadArchiveCache())
+    .then(() => scanArchive())
+    .catch(() => { /* 存档不可读时保持活动区口径 */ });
 
   // 会话成本按需回扫：切换到未扫过（>100 个）的旧会话时，补读其事件做分段计费
   async function ensureSessionIngested(session) {
@@ -399,6 +487,171 @@ export function apply(ctx) {
     } catch { scannedSessions.delete(id); /* 读取失败则允许下次重试，否则该会话永久漏计 */ }
   }
 
+  // —— 存档扫描：把活动区之外的历史用同一套计价函数补进聚合（只读，不动活动区与会话列表）——
+  /** 会话×日记录的序列化顺序：[cost, requests, in, out, cr, cw, peakCost, offPeakCost, peakTokens, offPeakTokens, inputCost, cacheReadCost, cacheWriteCost, outputCost] */
+  const SESSION_DAY_KEYS = [
+    "cost", "requests", "uncachedInputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens",
+    "peakCost", "offPeakCost", "peakTokens", "offPeakTokens",
+    "inputCost", "cacheReadCost", "cacheWriteCost", "outputCost",
+  ];
+
+  function encodeSessionDay(rec) {
+    return SESSION_DAY_KEYS.map((k) => rec[k] || 0);
+  }
+
+  function decodeSessionDay(arr) {
+    const rec = emptySessionDay();
+    for (let i = 0; i < SESSION_DAY_KEYS.length; i += 1) rec[SESSION_DAY_KEYS[i]] = Number(arr[i]) || 0;
+    return rec;
+  }
+
+  /** 把一个会话的一天并进各聚合（缓存装载用；存档实扫走 ingestEvent，不重复并）。 */
+  function mergeSessionDay(sessionId, day, rec, lastAt) {
+    const dayAgg = perDay.get(day) || emptyDayAgg();
+    dayAgg.uncachedInputTokens += rec.uncachedInputTokens;
+    dayAgg.outputTokens += rec.outputTokens;
+    dayAgg.cacheReadTokens += rec.cacheReadTokens;
+    dayAgg.cacheWriteTokens += rec.cacheWriteTokens;
+    dayAgg.cost += rec.cost;
+    dayAgg.requests += rec.requests;
+    perDay.set(day, dayAgg);
+    const dayBand = perDayBand.get(day) || emptyDayBand();
+    dayBand.peakCost += rec.peakCost; dayBand.offPeakCost += rec.offPeakCost;
+    dayBand.peakTokens += rec.peakTokens; dayBand.offPeakTokens += rec.offPeakTokens;
+    dayBand.inputCost += rec.inputCost; dayBand.cacheReadCost += rec.cacheReadCost;
+    dayBand.cacheWriteCost += rec.cacheWriteCost; dayBand.outputCost += rec.outputCost;
+    perDayBand.set(day, dayBand);
+    let sDays = perSessionDay.get(sessionId);
+    if (!sDays) { sDays = new Map(); perSessionDay.set(sessionId, sDays); }
+    sDays.set(day, rec);
+    if (lastAt > (sessionLastAt.get(sessionId) || 0)) sessionLastAt.set(sessionId, lastAt);
+  }
+
+  function mergeSessionHour(sessionId, hourKey, agg) {
+    const hourAgg = perDayHour.get(hourKey) || emptyHourAgg();
+    hourAgg.cost += agg.cost; hourAgg.tokens += agg.tokens; hourAgg.requests += agg.requests;
+    perDayHour.set(hourKey, hourAgg);
+    let sHours = perSessionHour.get(sessionId);
+    if (!sHours) { sHours = new Map(); perSessionHour.set(sessionId, sHours); }
+    sHours.set(hourKey, agg);
+  }
+
+  async function loadArchiveCache() {
+    try {
+      const text = (await readFile(ARCHIVE_CACHE_FILE, "utf8")).replace(/^\uFEFF/, "");
+      const obj = JSON.parse(text);
+      if (!obj || obj.version !== ARCHIVE_CACHE_VERSION) return;
+      if (obj.zips && typeof obj.zips === "object") {
+        for (const [zipPath, fp] of Object.entries(obj.zips)) if (typeof fp === "string") archiveSeenZips[zipPath] = fp;
+      }
+      const sessions = obj.sessions && typeof obj.sessions === "object" ? obj.sessions : {};
+      for (const [sessionId, rec] of Object.entries(sessions)) {
+        // 会话若已回到活动区（从存档恢复过），一律以活动区事件为准，跳过缓存避免重复计数
+        if (scannedSessions.has(sessionId)) continue;
+        const lastAt = Number(rec && rec.lastAt) || 0;
+        const days = rec && rec.days && typeof rec.days === "object" ? rec.days : {};
+        for (const [day, arr] of Object.entries(days)) {
+          if (Array.isArray(arr)) mergeSessionDay(sessionId, day, decodeSessionDay(arr), lastAt);
+        }
+        const hours = rec && rec.hours && typeof rec.hours === "object" ? rec.hours : {};
+        for (const [hourKey, arr] of Object.entries(hours)) {
+          if (!Array.isArray(arr)) continue;
+          mergeSessionHour(sessionId, hourKey, { cost: Number(arr[0]) || 0, tokens: Number(arr[1]) || 0, requests: Number(arr[2]) || 0 });
+        }
+        archivedSessions.add(sessionId);
+        archiveStatus.merged += 1;
+      }
+      archiveStatus.scannedAt = Number(obj.scannedAt) || 0;
+    } catch { /* 首次运行无缓存或缓存损坏，忽略 */ }
+  }
+
+  let archiveSaveChain = Promise.resolve();
+  function saveArchiveCache() {
+    archiveSaveChain = archiveSaveChain.then(async () => {
+      try {
+        const sessions = {};
+        for (const sessionId of archivedSessions) {
+          const days = perSessionDay.get(sessionId);
+          if (!days) continue;
+          const out = {};
+          for (const [day, rec] of days) out[day] = encodeSessionDay(rec);
+          const hours = {};
+          const sHours = perSessionHour.get(sessionId);
+          if (sHours) for (const [hourKey, agg] of sHours) hours[hourKey] = [agg.cost, agg.tokens, agg.requests];
+          sessions[sessionId] = { days: out, hours, lastAt: sessionLastAt.get(sessionId) || 0 };
+        }
+        await mkdir(CONFIG_DIR, { recursive: true });
+        await writeFile(ARCHIVE_CACHE_FILE, JSON.stringify({
+          version: ARCHIVE_CACHE_VERSION, scannedAt: Date.now(), zips: archiveSeenZips, sessions,
+        }), "utf8");
+      } catch { /* 写失败不影响功能 */ }
+    });
+    return archiveSaveChain;
+  }
+
+  function sessionIdFromZip(zipPath) {
+    const base = String(zipPath).split(/[\\/]/).pop() || "";
+    return base.replace(/\.zip$/i, "");
+  }
+
+  /** 后台扫存档：先只读元信息筛掉窗口外与未变化的 zip，再解压正文逐事件计价。 */
+  async function scanArchive() {
+    if (archiveStatus.running) return;
+    archiveStatus.running = true;
+    archiveStatus.done = false;
+    const cut = Date.now() - USAGE_KEEP_MS;
+    try {
+      const zips = [];
+      for (const root of ARCHIVE_DIRS) {
+        const found = await listArchiveZips(root);
+        for (const zipPath of found) zips.push(zipPath);
+      }
+      const todo = [];
+      for (const zipPath of zips) {
+        let st = null;
+        try { st = await stat(zipPath); } catch { continue; }
+        const fp = Math.round(st.mtimeMs) + ":" + st.size;
+        if (archiveSeenZips[zipPath] === fp) continue; // 已并入过（增量：日常只处理新归档）
+        const info = await readArchiveEntryInfo(zipPath);
+        if (!info || info.mtime < cut) { archiveSeenZips[zipPath] = fp; continue; } // 窗口外：只记指纹不解压
+        todo.push({ zipPath, fp });
+      }
+      archiveStatus.pending = todo.length;
+      let since = 0;
+      for (const item of todo) {
+        const one = await readArchiveSession(item.zipPath);
+        archiveSeenZips[item.zipPath] = item.fp;
+        archiveStatus.scanned += 1;
+        if (one && one.text) {
+          let sessionId = "";
+          let used = false;
+          eachArchiveEvent(one.text, (ev) => {
+            if (!ev || typeof ev.time !== "number") return;
+            if (ev.type === "session" && typeof ev.id === "string" && sessionId === "") { sessionId = ev.id; return; }
+            if (ev.type !== "assistant/message" || ev.time < cut) return;
+            ingestEvent(sessionId || sessionIdFromZip(item.zipPath), ev);
+            used = true;
+          });
+          if (used) {
+            archivedSessions.add(sessionId || sessionIdFromZip(item.zipPath));
+            archiveStatus.sessions += 1;
+            archiveStatus.bytes += one.text.length;
+          }
+        }
+        since += 1;
+        await new Promise((resolve) => setImmediate(resolve)); // 每个文件让出一次，界面不卡
+        if (since >= 64) { since = 0; await saveArchiveCache(); }
+      }
+      await saveArchiveCache();
+      archiveStatus.scannedAt = Date.now();
+    } catch (e) {
+      archiveStatus.error = String((e && e.message) || e).slice(0, 200);
+    } finally {
+      archiveStatus.running = false;
+      archiveStatus.done = true;
+    }
+  }
+
   function usagePayload() {
     const days = [...perDay.entries()]
       .map(([date, agg]) => ({ date, ...agg }))
@@ -411,6 +664,136 @@ export function apply(ctx) {
       return o;
     };
     return { ok: true, ready: usageReady, source: "local", today: round(today), days: days.slice(-7).map(round) };
+  }
+
+  // —— 看板聚合：近 N 天的 日 / 时段 / 会话 三个维度（只读，供 /wallet/api/board）——
+  const BOARD_MAX_DAYS = 90;
+
+  /** 最近 days 天的北京日期串，从最早到今天，缺数据的日子也占位（看板按固定格数渲染）。 */
+  function dayKeysBack(days) {
+    const out = [];
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    for (let i = days - 1; i >= 0; i -= 1) out.push(dayKeyOf(base.getTime() - i * 86400000));
+    return out;
+  }
+
+  /** 周一为 0 的星期序号（时段热力图按 周一..周日 七行渲染）。 */
+  function weekdayMon0(dayKey) {
+    const parts = dayKey.split("-").map(Number);
+    const wd = new Date(parts[0], parts[1] - 1, parts[2]).getDay();
+    return (wd + 6) % 7;
+  }
+
+  function boardPayload(days) {
+    const n = Math.max(1, Math.min(BOARD_MAX_DAYS, Math.floor(days) || 30));
+    const keys = dayKeysBack(n);
+    const inWindow = new Set(keys);
+    const r4 = (v) => Math.round(v * 10000) / 10000;
+
+    const dayRow = (key) => {
+      const agg = perDay.get(key) || emptyDayAgg();
+      const band = perDayBand.get(key) || emptyDayBand();
+      return {
+        date: key,
+        cost: r4(agg.cost),
+        requests: agg.requests,
+        uncachedInputTokens: agg.uncachedInputTokens,
+        outputTokens: agg.outputTokens,
+        cacheReadTokens: agg.cacheReadTokens,
+        cacheWriteTokens: agg.cacheWriteTokens,
+        peakCost: r4(band.peakCost),
+        offPeakCost: r4(band.offPeakCost),
+        peakTokens: band.peakTokens,
+        offPeakTokens: band.offPeakTokens,
+        inputCost: r4(band.inputCost),
+        cacheReadCost: r4(band.cacheReadCost),
+        cacheWriteCost: r4(band.cacheWriteCost),
+        outputCost: r4(band.outputCost),
+      };
+    };
+    const dayRows = keys.map(dayRow);
+
+    const totalsOf = (count) => {
+      const t = {
+        cost: 0, requests: 0,
+        uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
+        peakCost: 0, offPeakCost: 0, peakTokens: 0, offPeakTokens: 0,
+        inputCost: 0, cacheReadCost: 0, cacheWriteCost: 0, outputCost: 0,
+      };
+      // 合计口径与图表窗口无关：近 7 天 / 近 30 天 / 近 90 天各自固定，不随 days 参数伸缩
+      for (const key of dayKeysBack(Math.min(count, BOARD_MAX_DAYS))) {
+        const agg = perDay.get(key) || emptyDayAgg();
+        const band = perDayBand.get(key) || emptyDayBand();
+        t.cost += agg.cost; t.requests += agg.requests;
+        t.uncachedInputTokens += agg.uncachedInputTokens; t.outputTokens += agg.outputTokens;
+        t.cacheReadTokens += agg.cacheReadTokens; t.cacheWriteTokens += agg.cacheWriteTokens;
+        t.peakCost += band.peakCost; t.offPeakCost += band.offPeakCost;
+        t.peakTokens += band.peakTokens; t.offPeakTokens += band.offPeakTokens;
+        t.inputCost += band.inputCost; t.cacheReadCost += band.cacheReadCost;
+        t.cacheWriteCost += band.cacheWriteCost; t.outputCost += band.outputCost;
+      }
+      t.cost = r4(t.cost); t.peakCost = r4(t.peakCost); t.offPeakCost = r4(t.offPeakCost);
+      t.inputCost = r4(t.inputCost); t.cacheReadCost = r4(t.cacheReadCost);
+      t.cacheWriteCost = r4(t.cacheWriteCost); t.outputCost = r4(t.outputCost);
+      return t;
+    };
+
+    // 时段：窗口内逐日逐小时 → 周内七行 × 24 列，slot = 周一为 0 的星期 * 24 + 小时
+    const hourCost = new Array(168).fill(0);
+    const hourTokens = new Array(168).fill(0);
+    const hourReq = new Array(168).fill(0);
+    for (const [key, agg] of perDayHour) {
+      const at = key.indexOf("|");
+      const date = key.slice(0, at);
+      if (!inWindow.has(date)) continue;
+      const hour = Number(key.slice(at + 1));
+      if (!(hour >= 0 && hour <= 23)) continue;
+      const idx = weekdayMon0(date) * 24 + hour;
+      hourCost[idx] += agg.cost; hourTokens[idx] += agg.tokens; hourReq[idx] += agg.requests;
+    }
+    const hours = [];
+    for (let i = 0; i < 168; i += 1) {
+      hours.push({ slot: i, cost: r4(hourCost[i]), tokens: hourTokens[i], requests: hourReq[i] });
+    }
+
+    // 会话榜：窗口内按会话聚合（只统计窗口内有计费事件的会话）
+    const sessionRows = [];
+    for (const [sid, byDay] of perSessionDay) {
+      let cost = 0, tokens = 0, requests = 0, dayCount = 0;
+      for (const [key, agg] of byDay) {
+        if (!inWindow.has(key)) continue;
+        cost += agg.cost; tokens += agg.tokens; requests += agg.requests; dayCount += 1;
+      }
+      if (requests > 0) sessionRows.push({ id: sid, cost: r4(cost), tokens, requests, days: dayCount, lastAt: sessionLastAt.get(sid) || 0 });
+    }
+    sessionRows.sort((a, b) => b.cost - a.cost);
+
+    const todayKey = dayKeyOf(Date.now());
+    return {
+      ok: true,
+      ready: usageReady,
+      source: "local",
+      generatedAt: Date.now(),
+      windowDays: n,
+      today: dayRow(todayKey),
+      totals: { today: totalsOf(1), d7: totalsOf(7), d30: totalsOf(30), d90: totalsOf(90) },
+      days: dayRows,
+      hours,
+      sessions: sessionRows.slice(0, 12),
+      sessionCount: sessionRows.length,
+      // 存档补齐进度（前端只在 running 时提示）
+      archive: {
+        running: archiveStatus.running,
+        done: archiveStatus.done,
+        scanned: archiveStatus.scanned,
+        pending: archiveStatus.pending,
+        sessions: archiveStatus.sessions,
+        merged: archiveStatus.merged,
+        error: archiveStatus.error,
+        scannedAt: archiveStatus.scannedAt,
+      },
+    };
   }
 
   // —— 官方用量（platform userToken，可选；未配置/失败则回退本地聚合）——
@@ -595,6 +978,11 @@ export function apply(ctx) {
       officialToday,
       officialTodayStale: !!(officialToday && local.today && Math.abs(local.today.cost - officialToday.cost) > 0.01),
     };
+  });
+  registerRoute("GET", "/wallet/api/board", async (req) => {
+    const url = new URL(req.url || "/", "http://x");
+    const n = Number(url.searchParams.get("days"));
+    return boardPayload(Number.isFinite(n) && n > 0 ? n : 30);
   });
   registerRoute("POST", "/wallet/api/set-threshold", async (req) => {
     let body = "";
