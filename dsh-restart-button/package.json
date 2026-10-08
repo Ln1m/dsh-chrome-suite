@@ -18,9 +18,7 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "inject": [
-        "dsh-vk-contract"
-      ],
+      "inject": [],
       "platform": "web"
     }
   },

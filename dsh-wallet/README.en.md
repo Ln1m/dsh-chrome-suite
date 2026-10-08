@@ -1,8 +1,8 @@
 # dsh-wallet
 
-> This branch is the **vk build**: vk slots only, and [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite) (contract + layout) must be installed first. The vk-free build is on the [official branch](https://github.com/Ln1m/dsh-wallet/tree/official).
+> This branch is the **vk-free build**: official slots only, no vk slot references; identical behaviour with or without dsh-vk-suite. The vk build is on the [main branch](https://github.com/Ln1m/dsh-wallet/tree/main).
 
-A DeepSeek Harness (DSH) wallet plugin — a persistent panel at the bottom of the left sidebar showing your **DeepSeek account balance**, **today's total**, **current-session cost** (hover for the token / cost breakdown) and an **editable alert threshold**, with one-click links to the official recharge / API-key / usage pages, plus the model tool `query_deepseek_balance`. **Requires dsh-vk-suite**: the panel lands in its `vk.sidebar.footer` slot (persistent panel).
+A DeepSeek Harness (DSH) wallet plugin — a persistent panel at the bottom of the left sidebar showing your **DeepSeek account balance**, **today's total**, **current-session cost** (hover for the token / cost breakdown) and an **editable alert threshold**, with one-click links to the official recharge / API-key / usage pages, plus the model tool `query_deepseek_balance`. **No vk-suite dependency**: the panel lands in the official `sidebar.footer.action` slot as a wallet icon that pops the panel upward.
 
 ## ✨ Features
 
@@ -53,7 +53,7 @@ Host (Node process)
 └─ Model tool: query_deepseek_balance
 
 Client (browser)
-├─ Entry: vk.sidebar.footer (persistent panel; dsh-vk-suite required)
+├─ Entry: sidebar.footer.action (icon form, panel pops upward)
 ├─ Content: balance + today + session cost + threshold + Recharge/API Key/Usage
 ├─ Current session id via useSyncExternalStore over sessions.list
 └─ System notifications: low balance / over threshold (Notification API)

@@ -1,6 +1,6 @@
 # dsh-archive-button
 
-> This branch is the **vk build**: vk slots only, and [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite) (contract + layout) must be installed first. The vk-free build is on the [official branch](https://github.com/Ln1m/dsh-archive-button/tree/official).
+> This branch is the **vk-free build**: official slots only, no vk slot references; identical behaviour with or without dsh-vk-suite. The vk build is on the [main branch](https://github.com/Ln1m/dsh-archive-button/tree/main).
 
 > Two builds: `main` is the **vk build** (vk slots only — install the [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite) contract + skeleton first); the `official` branch is the **vk-free build** (no vk dependency, official slots only). **Use the vk build** — position: pinned at the sidebar bottom (`vk.sidebar.footer`).
 > Conflicts: a slot renders only its highest-priority entry, and two registrations at the same priority throw; mutually exclusive with anything claiming the same position (see "How to use it / what it conflicts with" in [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite)).

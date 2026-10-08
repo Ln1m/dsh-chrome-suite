@@ -1,6 +1,6 @@
 # dsh-restart-button
 
-> This branch is the **vk build**: vk slots only, and [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite) (contract + layout) must be installed first. The vk-free build is on the [official branch](https://github.com/Ln1m/dsh-restart-button/tree/official).
+> This branch is the **vk-free build**: official slots only, no vk slot references; identical behaviour with or without dsh-vk-suite. The vk build is on the [main branch](https://github.com/Ln1m/dsh-restart-button/tree/main).
 
 [中文](README.md) · English
 

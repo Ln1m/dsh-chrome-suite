@@ -1,12 +1,12 @@
 # dsh-archive-button（会话归档按钮）
 
-> 本分支是 **vk 版**：只注册 vk 槽，需先装 [dsh-vk-suite](https://github.com/Ln1m/dsh-vk-suite)（契约 + 骨架）。零 vk 版见 [official 分支](https://github.com/Ln1m/dsh-archive-button/tree/official)。
+> 本分支是 **零 vk 版**：只注册官方槽，代码不引用任何 vk 槽，装不装 dsh-vk-suite 都一样。vk 版见 [main 分支](https://github.com/Ln1m/dsh-archive-button/tree/main)。
 
 在左栏里放一个「归档」按钮：侧栏展开时落进官方**「工作区」标题行**、紧挨「添加工作区」图标右侧；那一行不在时退回页脚胶囊按钮。
 
 ## 位置与外观
 
-- 注册 Slot：`vk.sidebar.footer`（需先装 dsh-vk-suite）。
+- 注册 Slot：`sidebar.footer.action`（order 90）。
 - **落位**：把自建宿主节点（`.dab-host`，非 React 管理）搬进官方「工作区」标题行（按文本找到那一行的 `sectionHeader`），再用 portal 把按钮渲染进去 —— React 不追踪宿主节点的父子关系，搬走/搬回都不会在卸载时找不到目标。官方重渲染换掉节点时，每秒一次的重试会自动搬回原位。
 - **图标态**：进「工作区」行后只留图标（28×28，尺寸/圆角对齐官方那两颗图标按钮），文字收进 `title` / `aria-label`，配无障碍名称。
 - **退回态**：目标行不存在（官方会话栏卸载等）时退回页脚，渲染为胶囊按钮（图标 + 文字，文字随阶段变化，如「扫描中…」），不会消失。

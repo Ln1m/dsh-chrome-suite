@@ -1,164 +1,205 @@
-// dsh-restart-button — 会话头右上角的 DSH 重启按钮（两击确认 + 探针复位）。
-// vk 版：按钮落在 vk 布局的会话头槽（vk.session.header.right）。
-// host 路由是 /dsh-restart/restart（重启**本实例**，不是硬编码 3080）。
+// dsh-restart-button —— Client half
+//
+// Registers a "Restart DSH" button into `conversation.session.header.utilities`.
+// Two-click confirm, then POST to /dsh-restart/restart, which restarts THIS
+// instance (the host half resolves its own port).
+//
+// 2026-09-11 fix: the old implementation set `busy = true` and never reset it,
+// so one click left the button permanently disabled until the page was
+// reloaded. This version owns a full recovery state machine:
+//   idle -> armed (4s auto-reset) -> busy -> idle | timeout
+// while busy it probes the backend every 1.2s; recovery requires having seen a
+// real outage first (the dying process still answers for ~0.8s) followed by two
+// consecutive successes, with a 60s deadline as the final way out.
+//
+// The custom layout (@anoslide/dsh-client-vscode-layout) hides `.drb-btn` and
+// renders its own restart button in the left tab bar; both halves share the same
+// host route and the same semantics. The model never triggers either one.
+
 window.__ModuleLoader__.load({
-	id: 'dsh-restart-button',
-	factory: (require) => {
-		var module = { exports: {} };
-		var exports = module.exports;
-		Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+  id: 'dsh-restart-button',
+  factory: (require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+    Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+    var React = require('react');
+    const h = React.createElement;
 
-		const react = require('react');
-		const contract = require('dsh-vk-contract');
-		const h = react.createElement;
+    const ARM_TIMEOUT_MS = 4000;
+    const PROBE_INTERVAL_MS = 1200;
+    const PROBE_DEADLINE_MS = 60000;
 
-		const VK = contract.VK;
-		const vkCard = contract.vkCard;
+    function insertStyles(css) {
+      try {
+        const style = document.createElement('style');
+        style.textContent = css;
+        document.head.appendChild(style);
+        return () => { try { style.remove() } catch { /* ignore */ } };
+      } catch {
+        return () => {};
+      }
+    }
 
-		const ICON_REFRESH = '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>';
-		function VIcon({ name, size = 14 }) {
-			if (name !== 'refresh') return null;
-			return h('svg', { viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true', style: { flex: 'none', display: 'block' }, dangerouslySetInnerHTML: { __html: ICON_REFRESH } });
-		}
-
-		const CSS = `
-:root,body{--vk-accent:var(--dsw-alias-accent,var(--dsw-alias-state-business-primary))}
-.vk_restartBtn{appearance:none;border:none;background:none;cursor:pointer;width:28px;height:28px;border-radius:7px;color:var(--dsw-alias-label-secondary);display:inline-flex;align-items:center;justify-content:center;transition:background-color .12s,color .12s,transform .08s}
-.vk_restartBtn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.vk_restartBtn:active{transform:scale(.93)}
-.vk_restartBtn:disabled{opacity:.55;cursor:default}
-/* armed 态（两击确认的第一击）。必须**压过上面的 :hover**：鼠标点完还停在按钮上，
-   .vk_restartBtn:hover 是 (0,2,0)，比单类的 .vk_restartArm (0,1,0) 高，
-   旧的写法在悬停期间完全不生效 —— 界面上就是"点一次不会变红"、看不到任何待确认反馈（2026-09-28 实测）。
-   这里用双类选择器（同为 0,2,0 但排在 :hover 之后）并连 :hover 一起写死。 */
-.vk_restartBtn.vk_restartArm,
-.vk_restartBtn.vk_restartArm:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-interactive-bg-hover-danger)}
+    // 胶囊按钮：对齐官方 Session log 按钮（border-radius 18px / height 32px），
+    // 用主题 token 自动适配深/浅色。
+    const CSS = `
+.drb-wrap{display:inline-flex;align-items:center;gap:6px;flex:none;min-width:0;}
+.drb-btn{border:1px solid var(--dsw-alias-border-l2);height:32px;color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family);cursor:pointer;background:0 0;border-radius:18px;justify-content:center;align-items:center;gap:4px;padding:6px 12px;font-size:13px;font-weight:400;line-height:20px;display:inline-flex;flex:none;white-space:nowrap;}
+.drb-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);}
+.drb-btn:disabled{cursor:default;color:var(--dsw-alias-label-dimmed);}
+.drb-btn.drb-arm{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary);}
+.drb-btn.drb-arm:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);}
+.drb-note{font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22em;color:var(--dsw-alias-label-secondary);}
+.drb-note.drb-warn{color:var(--dsw-alias-state-warn-primary,#e0a63c);}
+.drb-note.drb-err{color:var(--dsw-alias-state-error-primary);}
 `;
-		(function injectCss() {
-			if (typeof document === 'undefined') return;
-			const plugin = 'dsh-vk-terminal';
-			for (const old of document.querySelectorAll('style[data-plugin="' + plugin + '"]')) { try { old.remove(); } catch { /* ignore */ } }
-			const tag = document.createElement('style');
-			tag.dataset.plugin = plugin;
-			tag.textContent = CSS;
-			document.head.appendChild(tag);
-		})();
 
-		const PROBE_INTERVAL_MS = 1200;
-		const PROBE_DEADLINE_MS = 60000;
-		/** 每个实例都会应答的最便宜活性探针：首页本身。 */
-		async function vkBackendAlive() {
-			try {
-				const res = await fetch('/', { method: 'GET', cache: 'no-store', redirect: 'manual' });
-				return res.ok === true || res.type === 'opaqueredirect' || (res.status >= 200 && res.status < 400);
-			} catch {
-				return false;
-			}
-		}
+    /** One cheap liveness probe that every dsh instance answers: the index page. */
+    async function backendAlive() {
+      try {
+        const res = await fetch('/', { method: 'GET', cache: 'no-store', redirect: 'manual' });
+        return res.ok === true || res.type === 'opaqueredirect' || (res.status >= 200 && res.status < 400);
+      } catch {
+        return false;
+      }
+    }
 
-		/** 按钮外观由 (阶段, 忙) 纯函数决定，避免渲染期出现未定义文案。 */
-		function restartButtonView(phase, busy) {
-			const disabled = phase === 'busy' || busy === true;
-			const label = phase === 'armed' ? '确认' : '⟳ 重启';
-			const title = phase === 'armed'
-				? '再次点击确认重启（将中断当前对话）'
-				: phase === 'busy' ? '重启中：按钮会在后端恢复后自动恢复可点' : '重启 DSH 后端（两击确认）';
-			return { disabled, label, title, armed: phase === 'armed' };
-		}
+    function RestartButton() {
+      const [phase, setPhase] = React.useState('idle'); // idle | armed | busy | timeout
+      const [note, setNote] = React.useState(null);
+      const [noteKind, setNoteKind] = React.useState('plain');
+      const [info, setInfo] = React.useState(null);
+      const failuresRef = React.useRef(0);
+      const streakRef = React.useRef(0);
+      const timerRef = React.useRef(null);
+      const deadlineRef = React.useRef(0);
 
-		function VKRestartButton() {
-			const [phase, setPhase] = react.useState('idle');
-			const [note, setNote] = react.useState(null);
-			const failures = react.useRef(0);
-			const streak = react.useRef(0);
-			const timer = react.useRef(null);
-			const deadline = react.useRef(0);
+      const stopPolling = React.useCallback(() => {
+        if (timerRef.current !== null) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+      }, []);
 
-			const stopPolling = react.useCallback(() => {
-				if (timer.current !== null) { clearInterval(timer.current); timer.current = null; }
-			}, []);
-			react.useEffect(() => () => stopPolling(), [stopPolling]);
-			// armed 态 4 秒没确认就自己退回 idle —— 两击确认不能挂着一个永久待确认的按钮。
-			react.useEffect(() => {
-				if (phase !== 'armed') return void 0;
-				const t = setTimeout(() => { setPhase((cur) => (cur === 'armed' ? 'idle' : cur)); setNote(null); }, 4000);
-				return () => clearTimeout(t);
-			}, [phase]);
+      React.useEffect(() => () => stopPolling(), [stopPolling]);
 
-			const poll = react.useCallback(async () => {
-				const ok = await vkBackendAlive();
-				if (!ok) {
-					failures.current += 1;
-					streak.current = 0;
-					setNote('后端已停止应答，重启中…');
-					return;
-				}
-				if (failures.current > 0) {
-					// 旧进程在垂死窗口内仍会应答，所以「见过失败 + 连续 2 次成功」才算回来。
-					streak.current += 1;
-					if (streak.current >= 2) {
-						stopPolling();
-						failures.current = 0;
-						streak.current = 0;
-						setPhase('idle');
-						setNote(null);
-						return;
-					}
-					setNote('后端正在恢复…');
-					return;
-				}
-				setNote('已请求重启，等待后端断开…');
-			}, [stopPolling]);
+      // Instance identity (port / argv) for the tooltip; absence is harmless.
+      React.useEffect(() => {
+        let alive = true;
+        fetch('/dsh-restart/status', { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => { if (alive && data && data.ok) setInfo(data); })
+          .catch(() => { /* older host half: no status route */ });
+        return () => { alive = false; };
+      }, []);
 
-			const onClick = react.useCallback(async () => {
-				if (phase === 'busy') return;
-				if (phase !== 'armed') {
-					setPhase('armed');
-					setNote('再次点击「确认」以重启后端');
-					return;
-				}
-				setPhase('busy');
-				setNote('已请求重启，等待后端断开…');
-				failures.current = 0;
-				streak.current = 0;
-				deadline.current = Date.now() + PROBE_DEADLINE_MS;
-				stopPolling();
-				timer.current = setInterval(() => {
-					if (Date.now() > deadline.current) {
-						stopPolling();
-						setPhase('timeout');
-						setNote('重启未确认（60 秒）；按钮已恢复可点，页面异常时可整页重载');
-						return;
-					}
-					poll();
-				}, PROBE_INTERVAL_MS);
-				try {
-					await fetch('/dsh-restart/restart', { method: 'POST', cache: 'no-store' });
-				} catch {
-					setNote('重启请求已发出（连接在应答前中断属正常）');
-				}
-				poll();
-			}, [phase, poll, stopPolling]);
+      React.useEffect(() => {
+        if (phase !== 'armed') return undefined;
+        const t = setTimeout(() => { setPhase((cur) => (cur === 'armed' ? 'idle' : cur)); setNote(null); }, ARM_TIMEOUT_MS);
+        return () => clearTimeout(t);
+      }, [phase]);
 
-			const view = restartButtonView(phase, false);
-			return h('button', {
-				type: 'button',
-				className: 'vk_restartBtn' + (view.armed ? ' vk_restartArm' : ''),
-				disabled: view.disabled,
-				title: note === null ? view.title : view.title + ' · ' + note,
-				'aria-label': '重启 DSH 后端',
-				'data-vk-restart': phase,
-				onClick
-			}, h(VIcon, { name: 'refresh', size: 15 }));
-		}
+      const poll = React.useCallback(async () => {
+        const ok = await backendAlive();
+        if (!ok) {
+          failuresRef.current += 1;
+          streakRef.current = 0;
+          setNoteKind('warn');
+          setNote('后端已停止应答，重启中…');
+          return;
+        }
+        if (failuresRef.current > 0) {
+          streakRef.current += 1;
+          if (streakRef.current >= 2) {
+            stopPolling();
+            failuresRef.current = 0;
+            streakRef.current = 0;
+            setPhase('idle');
+            setNoteKind('plain');
+            setNote('后端已重新连接，按钮已恢复');
+            return;
+          }
+          setNoteKind('warn');
+          setNote('后端正在恢复…');
+          return;
+        }
+        setNoteKind('plain');
+        setNote('已请求重启，等待后端断开…');
+      }, [stopPolling]);
 
-		function apply(ctx) {
-			vkCard(ctx, { slot: VK.session.headerRight, id: 'restart', order: 10, component: VKRestartButton });
-		}
+      const onClick = React.useCallback(async () => {
+        if (phase === 'busy') return;
+        if (phase !== 'armed') {
+          setPhase('armed');
+          setNoteKind('plain');
+          setNote('再次点击「确认」以重启后端');
+          return;
+        }
+        setPhase('busy');
+        setNoteKind('plain');
+        setNote('已请求重启，等待后端断开…');
+        failuresRef.current = 0;
+        streakRef.current = 0;
+        deadlineRef.current = Date.now() + PROBE_DEADLINE_MS;
+        stopPolling();
+        timerRef.current = setInterval(() => {
+          if (Date.now() > deadlineRef.current) {
+            stopPolling();
+            setPhase('timeout');
+            setNoteKind('err');
+            setNote('重启未确认（60 秒），按钮已恢复可点；若页面异常请手动刷新');
+            return;
+          }
+          poll();
+        }, PROBE_INTERVAL_MS);
+        try {
+          await fetch('/dsh-restart/restart', { method: 'POST', cache: 'no-store' });
+        } catch {
+          setNoteKind('warn');
+          setNote('重启请求已发出（连接在应答前中断属正常）');
+        }
+        poll();
+      }, [phase, poll, stopPolling]);
 
-		exports.apply = apply;
-		exports.inject = ['slots'];
-		exports.restartButtonView = restartButtonView;
-		return module.exports;
-	}
+      // busy 不改文字（与自研布局那颗按钮同一套文案）：官方 ConnectionIndicator 已经提示在重启，
+      // 忙态靠禁用变暗（.drb-btn:disabled）区分，避免按钮面在窄栏里突然变宽。
+      const label = phase === 'armed' ? '确认' : phase === 'timeout' ? '重启超时' : '重启 DSH';
+      const portText = info && info.port ? '（端口 ' + info.port + '）' : '';
+      const title = phase === 'busy'
+        ? '重启中' + portText + '：按钮会在后端恢复后自动复位'
+        : phase === 'timeout'
+          ? '上次重启未确认；点一下重新开始'
+          : '重启 DSH 后端' + portText + '（两击确认，将中断当前对话）';
+
+      return h('span', { className: 'drb-wrap' },
+        h('button', {
+          type: 'button',
+          className: 'drb-btn' + (phase === 'armed' ? ' drb-arm' : ''),
+          disabled: phase === 'busy',
+          onClick,
+          title,
+        }, h('span', null, label)),
+        note ? h('span', { className: 'drb-note' + (noteKind === 'warn' ? ' drb-warn' : noteKind === 'err' ? ' drb-err' : ''), title: note }, note) : null,
+      );
+    }
+
+    const inject = ['slots'];
+    function apply(ctx) {
+      insertStyles(CSS);
+      const slots = ctx.get('slots');
+      if (slots === undefined) {
+        console.warn('[dsh-restart-button] slots service unavailable');
+        return;
+      }
+      slots.inject('conversation.session.header.utilities', () => slots.register(
+        { name: 'conversation.session.header.utilities', id: 'dsh-restart', order: 1, label: '重启 DSH' },
+        () => h(RestartButton),
+      ));
+      console.log('[dsh-restart-button] client applied');
+    }
+
+    exports.apply = apply;
+    exports.inject = inject;
+    return module.exports;
+  }
 });
