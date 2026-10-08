@@ -2,7 +2,7 @@
 // dsh-archive-button —— Client 半端
 // 位置：官方「工作区」标题行（含官方「添加工作区」图标那一行）里、官方 headerActions 之后，
 //   只留图标，紧挨「添加工作区」右侧。做法：注册在 sidebar.footer.action 拿到 React 的挂载点，
-//   再把**自建宿主节点**（.dab-host，非 React 管理）搬进那一行，用 portal 把按钮渲染进去 ——
+//   再把**自建宿主节点**（.dab_host，非 React 管理）搬进那一行，用 portal 把按钮渲染进去 ——
 //   React 从不追踪宿主节点的父子关系，搬走/搬回都不会让它卸载时找不到目标（直接搬 React 自己
 //   的节点会抛 NotFoundError）。目标行不在时（侧栏收起 / 官方会话栏卸载）自动降级为 footer 里的
 //   流式胶囊按钮（带「归档」文字），仍然可见，绝不隐藏。
@@ -18,7 +18,7 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
     var React = require('react');
     const h = React.createElement;
-    // 浮层必须挂到 document.body：本组件根节点 .dab-slot 是定位元素，一旦带 z-index 就会
+    // 浮层必须挂到 document.body：本组件根节点 .dab_slot 是定位元素，一旦带 z-index 就会
     // 创建 stacking context —— 浮层留在它内部时 z-index 再高也只在这个"笼子"里排序，对外照样
     // 被更高层级内容遮挡（2026-09-10 实测：z-index 提到 9999 仍被遮挡就是这个原因）。
     let ReactDOM = null;
@@ -38,57 +38,58 @@ window.__ModuleLoader__.load({
     const PANEL_W = 286;
 
     const CSS = `
-.dab-slot{display:flex;align-items:center;gap:6px;}
-.dab-slot.dab-rail{display:none;}
+body{--vk-accent:var(--dsw-alias-accent,var(--dsw-alias-state-business-primary));--vk-accent-ring:color-mix(in srgb,var(--vk-accent) 22%,transparent);--vk-accent-soft:color-mix(in srgb,var(--vk-accent) 12%,transparent);--vk-ok:#73c991;--vk-danger:var(--dsw-alias-state-error-primary,#f14c4c);--vk-danger-soft:color-mix(in srgb,var(--vk-danger) 35%,transparent);--vk-fg:var(--dsw-alias-label-primary);--vk-fg2:var(--dsw-alias-label-secondary);--vk-fg3:var(--dsw-alias-label-tertiary);--vk-line:var(--dsw-alias-border-l1);--vk-line2:var(--dsw-alias-border-l2);--vk-bg-hover:var(--dsw-alias-interactive-bg-hover);--vk-r-xs:4px;--vk-r-sm:6px;--vk-r-md:8px;--vk-r-lg:12px;--vk-r-pill:999px;--vk-fs-xs:11px;--vk-fs-sm:12px;--vk-fs-md:13px;--vk-fs-lg:14px;--vk-dur:.12s;--vk-ease:cubic-bezier(.2,.7,.3,1);--vk-fade:background-color var(--vk-dur) var(--vk-ease),color var(--vk-dur) var(--vk-ease),border-color var(--vk-dur) var(--vk-ease),opacity var(--vk-dur) var(--vk-ease);--vk-ring:0 0 0 2px var(--vk-accent-ring);}
+.dab_slot{display:flex;align-items:center;gap:6px;}
+.dab_slot.dab_rail{display:none;}
 /* 已落进官方「工作区」标题行时，留在原插槽里的根节点不产生任何盒子（按钮本体已 portal 到那一行） */
-.dab-slot.dab-row{display:contents;}
+.dab_slot.dab_row{display:contents;}
 /* 自建宿主节点：按钮 portal 的家。落点是底部「设置」那一行右侧、与设置各占一半（2026-09-29 用户口径） */
-.dab-host{display:flex;align-items:center;flex:1 1 0;min-width:0;}
+.dab_host{display:flex;align-items:center;flex:1 1 0;min-width:0;}
 /* 设置行：行内两项等分。官方触发行不带构建哈希之外的信息，用 [class*=triggerRow] 按后缀匹配 */
 [class*=triggerRow]{display:flex!important;align-items:center;gap:6px;}
 [class*=triggerRow] button[aria-label="设置"]{flex:1 1 0;min-width:0;width:auto;}
 /* 侧栏收起成 rail：方向由行变窄，两块都回到图标尺寸、不再等分 */
 [class*=collapsed] [class*=triggerRow] button[aria-label="设置"]{flex:0 0 auto;width:auto;}
-[class*=collapsed] .dab-host{flex:0 0 auto;}
-[class*=collapsed] .dab-host .dab-ibtn{flex:0 0 auto;width:32px;}
-.dab-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:30px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:15px;background:0 0;color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family,inherit);font-size:13px;font-weight:400;line-height:20px;cursor:pointer;white-space:nowrap;}
-.dab-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);}
-.dab-btn:disabled{cursor:default;color:var(--dsw-alias-label-dimmed);}
-.dab-btn.dab-danger{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary);}
-.dab-btn.dab-danger:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);}
-.dab-btn.dab-ok{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary);}
-.dab-btn svg{display:block;flex:none;}
+[class*=collapsed] .dab_host{flex:0 0 auto;}
+[class*=collapsed] .dab_host .dab_ibtn{flex:0 0 auto;width:32px;}
+.dab_btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:30px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--vk-r-lg);background:0 0;color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family,inherit);font-size:var(--vk-fs-md);font-weight:400;line-height:20px;cursor:pointer;white-space:nowrap;}
+.dab_btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);}
+.dab_btn:disabled{cursor:default;color:var(--dsw-alias-label-dimmed);}
+.dab_btn.dab_danger{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary);}
+.dab_btn.dab_danger:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);}
+.dab_btn.dab_ok{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary);}
+.dab_btn svg{display:block;flex:none;}
 /* 图标态：进「工作区」行后只留图标，尺寸/圆角对齐官方那两颗 28×28 图标按钮 */
-.dab-ibtn{display:inline-flex;align-items:center;justify-content:center;flex:1 1 auto;width:100%;height:32px;padding:0;border:none;border-radius:6px;background:0 0;color:var(--dsw-alias-label-secondary);font-family:inherit;cursor:pointer;}
-.dab-ibtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);}
-.dab-ibtn:active:not(:disabled){transform:scale(.94);}
-.dab-ibtn:disabled{cursor:default;color:var(--dsw-alias-label-dimmed);}
-.dab-ibtn.dab-danger{color:var(--dsw-alias-state-error-primary);}
-.dab-ibtn.dab-danger:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);}
-.dab-ibtn.dab-ok{color:var(--dsw-alias-state-success-primary);}
-.dab-ibtn svg{display:block;flex:none;}
-.dab-backdrop{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.28);}
-.dab-panel{position:fixed;z-index:9999;width:${PANEL_W}px;max-width:calc(100vw - 24px);max-height:calc(100vh - 32px);overflow:auto;box-sizing:border-box;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-base,Menu)));border:1px solid var(--dsw-alias-border-l2);border-radius:12px;box-shadow:0 10px 32px rgba(0,0,0,.32);padding:12px;font-size:12px;color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;gap:8px;word-break:break-word;}
-.dab-head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
-.dab-h{font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;}
-.dab-x{border:none;background:0 0;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;border-radius:6px;font-family:inherit;}
-.dab-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);}
-.dab-body{color:var(--dsw-alias-label-secondary);line-height:1.6;font-variant-numeric:tabular-nums;}
-.dab-body b{color:var(--dsw-alias-label-primary);font-weight:600;}
-.dab-actions{display:flex;align-items:center;gap:8px;}
-.dab-act{height:28px;padding:0 12px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2);background:0 0;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;}
-.dab-act:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);}
-.dab-act:disabled{cursor:default;color:var(--dsw-alias-label-dimmed);}
-.dab-act.dab-primary{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-foreground);}
-.dab-act.dab-primary:hover:not(:disabled){filter:brightness(1.08);}
-.dab-act.dab-danger{background:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-label-primary-foreground);}
-.dab-act.dab-danger:hover:not(:disabled){filter:brightness(1.08);}
-.dab-msg{display:flex;align-items:flex-start;gap:5px;line-height:1.5;}
-.dab-msg svg{display:block;flex:none;margin-top:2px;}
-.dab-msg-ok{color:var(--dsw-alias-state-success-primary);}
-.dab-msg-warn{color:var(--dsw-alias-state-warn-primary);}
-.dab-msg-err{color:var(--dsw-alias-state-error-primary);word-break:break-all;}
-.dab-foot{border-top:1px solid var(--dsw-alias-border-l1);padding-top:7px;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:1.5;font-variant-numeric:tabular-nums;}
+.dab_ibtn{display:inline-flex;align-items:center;justify-content:center;flex:1 1 auto;width:100%;height:32px;padding:0;border:none;border-radius:var(--vk-r-sm);background:0 0;color:var(--dsw-alias-label-secondary);font-family:inherit;cursor:pointer;}
+.dab_ibtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);}
+.dab_ibtn:active:not(:disabled){transform:scale(.94);}
+.dab_ibtn:disabled{cursor:default;color:var(--dsw-alias-label-dimmed);}
+.dab_ibtn.dab_danger{color:var(--dsw-alias-state-error-primary);}
+.dab_ibtn.dab_danger:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);}
+.dab_ibtn.dab_ok{color:var(--dsw-alias-state-success-primary);}
+.dab_ibtn svg{display:block;flex:none;}
+.dab_backdrop{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.28);}
+.dab_panel{position:fixed;z-index:9999;width:${PANEL_W}px;max-width:calc(100vw - 24px);max-height:calc(100vh - 32px);overflow:auto;box-sizing:border-box;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-base,Menu)));border:1px solid var(--dsw-alias-border-l2);border-radius:var(--vk-r-lg);box-shadow:0 10px 32px rgba(0,0,0,.32);padding:12px;font-size:var(--vk-fs-sm);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;gap:8px;word-break:break-word;}
+.dab_head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.dab_h{font-size:var(--vk-fs-md);font-weight:600;display:inline-flex;align-items:center;gap:6px;}
+.dab_x{border:none;background:0 0;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:var(--vk-fs-lg);line-height:1;padding:2px 4px;border-radius:var(--vk-r-sm);font-family:inherit;}
+.dab_x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);}
+.dab_body{color:var(--dsw-alias-label-secondary);line-height:1.6;font-variant-numeric:tabular-nums;}
+.dab_body b{color:var(--dsw-alias-label-primary);font-weight:600;}
+.dab_actions{display:flex;align-items:center;gap:8px;}
+.dab_act{height:28px;padding:0 12px;border-radius:var(--vk-r-md);border:1px solid var(--dsw-alias-border-l2);background:0 0;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:var(--vk-fs-sm);cursor:pointer;display:inline-flex;align-items:center;gap:5px;}
+.dab_act:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);}
+.dab_act:disabled{cursor:default;color:var(--dsw-alias-label-dimmed);}
+.dab_act.dab_primary{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-foreground);}
+.dab_act.dab_primary:hover:not(:disabled){filter:brightness(1.08);}
+.dab_act.dab_danger{background:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-label-primary-foreground);}
+.dab_act.dab_danger:hover:not(:disabled){filter:brightness(1.08);}
+.dab_msg{display:flex;align-items:flex-start;gap:5px;line-height:1.5;}
+.dab_msg svg{display:block;flex:none;margin-top:2px;}
+.dab_msg_ok{color:var(--dsw-alias-state-success-primary);}
+.dab_msg_warn{color:var(--dsw-alias-state-warn-primary);}
+.dab_msg_err{color:var(--dsw-alias-state-error-primary);word-break:break-all;}
+.dab_foot{border-top:1px solid var(--dsw-alias-border-l1);padding-top:7px;color:var(--dsw-alias-label-secondary);font-size:var(--vk-fs-xs);line-height:1.5;font-variant-numeric:tabular-nums;}
 `;
 
     function svgIcon(d, size) {
@@ -128,7 +129,7 @@ window.__ModuleLoader__.load({
       if (hostRef.current === null && typeof document !== 'undefined') {
         try {
           const d = document.createElement('div');
-          d.className = 'dab-host';
+          d.className = 'dab_host';
           hostRef.current = d;
         } catch { hostRef.current = null; }
       }
@@ -320,41 +321,41 @@ window.__ModuleLoader__.load({
         : phase === 'running' ? '归档进行中…'
         : phase === 'confirm' ? '确认归档：再点一次即开始（3 天未活动的会话）'
         : '归档 3 天未活动的会话';
-      const btnCls = (docked ? 'dab-ibtn' : 'dab-btn')
-        + (phase === 'confirm' ? ' dab-danger' : (phase === 'idle' && msg && msg.kind === 'ok' ? ' dab-ok' : ''));
+      const btnCls = (docked ? 'dab_ibtn' : 'dab_btn')
+        + (phase === 'confirm' ? ' dab_danger' : (phase === 'idle' && msg && msg.kind === 'ok' ? ' dab_ok' : ''));
 
       const last = view && view.result;
       const lines = [];
-      if (phase === 'scanning') lines.push(h('div', { className: 'dab-body', key: 's' }, '正在扫描 3 天未活动的会话…'));
+      if (phase === 'scanning') lines.push(h('div', { className: 'dab_body', key: 's' }, '正在扫描 3 天未活动的会话…'));
       if (phase === 'confirm' && scan) {
-        lines.push(h('div', { className: 'dab-body', key: 'c1', title: '打包为 zip 存入 archive\\dsh-sessions；逐个校验字节一致后才移出原目录（可还原）' }, '待归档 ', h('b', null, scan.candidates + ' 个'), ' · ', h('b', null, scan.totalMB + ' MB')));
-        lines.push(h('div', { className: 'dab-body', key: 'c2', title: '3 天内活跃的会话不动' }, '保留 ', h('b', null, scan.skippedActive + ' 个')));
+        lines.push(h('div', { className: 'dab_body', key: 'c1', title: '打包为 zip 存入 archive\\dsh-sessions；逐个校验字节一致后才移出原目录（可还原）' }, '待归档 ', h('b', null, scan.candidates + ' 个'), ' · ', h('b', null, scan.totalMB + ' MB')));
+        lines.push(h('div', { className: 'dab_body', key: 'c2', title: '3 天内活跃的会话不动' }, '保留 ', h('b', null, scan.skippedActive + ' 个')));
       }
-      if (phase === 'running') lines.push(h('div', { className: 'dab-body', key: 'r', title: '打包后逐个校验字节一致才移出原目录，请勿关闭 DSH' }, '归档中…'));
+      if (phase === 'running') lines.push(h('div', { className: 'dab_body', key: 'r', title: '打包后逐个校验字节一致才移出原目录，请勿关闭 DSH' }, '归档中…'));
       if (!lines.length && msg) {
         const Icon = msg.kind === 'ok' ? CheckIcon : WarnIcon;
-        lines.push(h('div', { className: 'dab-msg dab-msg-' + msg.kind, key: 'm' }, h(Icon), h('span', null, msg.text)));
+        lines.push(h('div', { className: 'dab_msg dab_msg-' + msg.kind, key: 'm' }, h(Icon), h('span', null, msg.text)));
       }
 
       const actions = [];
       if (phase === 'confirm') {
-        actions.push(h('button', { type: 'button', className: 'dab-act dab-danger', key: 'go', onClick: doRun }, '确认归档'));
-        actions.push(h('button', { type: 'button', className: 'dab-act', key: 'no', onClick: () => { setPhase('idle'); setScan(null); } }, '取消'));
+        actions.push(h('button', { type: 'button', className: 'dab_act dab_danger', key: 'go', onClick: doRun }, '确认归档'));
+        actions.push(h('button', { type: 'button', className: 'dab_act', key: 'no', onClick: () => { setPhase('idle'); setScan(null); } }, '取消'));
       } else if (phase === 'idle') {
-        actions.push(h('button', { type: 'button', className: 'dab-act dab-primary', key: 'scan', onClick: doScan, title: '扫描 3 天未活动的会话' }, '扫描'));
+        actions.push(h('button', { type: 'button', className: 'dab_act dab_primary', key: 'scan', onClick: doScan, title: '扫描 3 天未活动的会话' }, '扫描'));
       }
 
       const panelContent = open ? h(React.Fragment, null,
-        h('div', { className: 'dab-backdrop', onClick: () => setOpen(false) }),
-        h('div', { className: 'dab-panel', style: panelStyle || { left: 8, bottom: 60, width: PANEL_W + 'px' }, role: 'dialog', 'aria-label': '归档会话' },
-          h('div', { className: 'dab-head' },
-            h('span', { className: 'dab-h' }, h(ArchiveIcon), '归档会话'),
-            h('button', { type: 'button', className: 'dab-x', onClick: () => setOpen(false), 'aria-label': '关闭', title: '关闭' }, '×'),
+        h('div', { className: 'dab_backdrop', onClick: () => setOpen(false) }),
+        h('div', { className: 'dab_panel', style: panelStyle || { left: 8, bottom: 60, width: PANEL_W + 'px' }, role: 'dialog', 'aria-label': '归档会话' },
+          h('div', { className: 'dab_head' },
+            h('span', { className: 'dab_h' }, h(ArchiveIcon), '归档会话'),
+            h('button', { type: 'button', className: 'dab_x', onClick: () => setOpen(false), 'aria-label': '关闭', title: '关闭' }, '×'),
           ),
           lines.length ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } }, lines) : null,
-          actions.length ? h('div', { className: 'dab-actions' }, actions) : null,
+          actions.length ? h('div', { className: 'dab_actions' }, actions) : null,
           last && last.mode === 'archive'
-            ? h('div', { className: 'dab-foot' }, '上次归档 ' + fmtTime(last.finishedAt) + ' · ' + last.archived + ' 个 · 释放 ' + last.freedMB + ' MB' + (last.failed > 0 ? ' · 失败 ' + last.failed : ''))
+            ? h('div', { className: 'dab_foot' }, '上次归档 ' + fmtTime(last.finishedAt) + ' · ' + last.archived + ' 个 · 释放 ' + last.freedMB + ' MB' + (last.failed > 0 ? ' · 失败 ' + last.failed : ''))
             : null,
         ),
       ) : null;
@@ -381,7 +382,7 @@ window.__ModuleLoader__.load({
 
       return h('div', {
         ref: slotRef,
-        className: 'dab-slot' + (wide ? '' : ' dab-rail') + (docked ? ' dab-row' : ''),
+        className: 'dab_slot' + (wide ? '' : ' dab_rail') + (docked ? ' dab_row' : ''),
         'data-dab-pos': docked ? 'row' : 'inline',
       },
         docked && hostRef.current && ReactDOM && typeof ReactDOM.createPortal === 'function'
